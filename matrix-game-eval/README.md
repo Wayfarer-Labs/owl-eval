@@ -246,4 +246,4 @@ Submit evaluation results.
 
 ## License
 
-[Your license here]
+MIT

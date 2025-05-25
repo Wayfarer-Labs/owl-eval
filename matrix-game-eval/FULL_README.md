@@ -331,7 +331,7 @@ npm run dev -- --debug
 
 ## License
 
-[Your license here]
+MIT
 
 ## Citation
 
