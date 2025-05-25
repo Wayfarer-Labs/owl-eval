@@ -1,0 +1,41 @@
+# Core dependencies
+torch>=2.0.0
+torchvision>=0.15.0
+diffusers>=0.25.0
+transformers>=4.36.0
+accelerate>=0.25.0
+huggingface-hub>=0.20.0
+
+# Web framework
+flask>=3.0.0
+flask-cors>=4.0.0
+flask-sqlalchemy>=3.0.0
+
+# Database
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+
+# Human evaluation
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Video processing
+opencv-python>=4.8.0
+imageio>=2.31.0
+imageio-ffmpeg>=0.4.8
+
+# API integrations
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Utilities
+tqdm>=4.66.0
+pyyaml>=6.0.0
+click>=8.1.0

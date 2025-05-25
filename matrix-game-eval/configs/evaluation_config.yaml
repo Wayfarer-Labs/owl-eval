@@ -1,0 +1,93 @@
+# Configuration for Matrix-Game Human Evaluation
+
+# Model configurations
+models:
+  matrix_game:
+    name: "Skywork/Matrix-Game"
+    model_type: "diffusion"
+    checkpoint: "latest"
+  
+  # Baseline models for comparison
+  baselines:
+    - name: "oasis"
+      path: "path/to/oasis/model"
+    - name: "mineworld"  
+      path: "path/to/mineworld/model"
+
+# Evaluation dimensions (from paper)
+evaluation_dimensions:
+  - name: "overall_quality"
+    description: "Overall impression of generated videos including realism, coherence, and completeness"
+    weight: 1.0
+    
+  - name: "controllability"
+    description: "Ability to accurately translate keyboard and mouse inputs into desired behaviors"
+    weight: 1.0
+    
+  - name: "visual_quality"
+    description: "Perceptual fidelity, texture clarity, and aesthetic appeal of individual frames"
+    weight: 1.0
+    
+  - name: "temporal_consistency"
+    description: "Motion stability and physical plausibility across frames"
+    weight: 1.0
+
+# Minecraft scenarios for testing
+scenarios:
+  - beach
+  - desert
+  - forest
+  - hills
+  - icy
+  - mushroom
+  - plains
+  - river
+
+# Control actions to test
+control_actions:
+  keyboard:
+    - forward
+    - backward
+    - left
+    - right
+    - jump
+    - attack
+  
+  mouse:
+    - camera_up
+    - camera_down
+    - camera_left
+    - camera_right
+    - camera_upper_left
+    - camera_upper_right
+    - camera_lower_left
+    - camera_lower_right
+
+# Human evaluation settings
+human_evaluation:
+  # Number of evaluators per comparison
+  evaluators_per_comparison: 5
+  
+  # Number of video pairs per scenario
+  pairs_per_scenario: 10
+  
+  # Video generation settings
+  video_length_frames: 65
+  fps: 16
+  resolution: [1280, 720]
+  
+  # A/B testing settings
+  randomize_order: true
+  blind_labels: ["Model A", "Model B"]
+  
+# Prolific settings (for future integration)
+prolific:
+  study_name: "Minecraft World Generation Evaluation"
+  reward_per_comparison: 0.5  # in USD
+  estimated_time_minutes: 2
+  
+# Local testing settings
+local_testing:
+  enable_debug_mode: true
+  save_all_generations: true
+  output_dir: "./data/generations"

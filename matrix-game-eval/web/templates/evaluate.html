@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Evaluate - Matrix-Game{% endblock %}
+
+{% block extra_css %}
+<style>
+    .video-container {
+        position: relative;
+        width: 100%;
+        padding-bottom: 56.25%; /* 16:9 aspect ratio */
+        background: #000;
+    }
+    
+    .video-container video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+    
+    .evaluation-section {
+        margin-top: 30px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+    }
+    
+    .rating-options {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin: 20px 0;
+    }
+    
+    .rating-option {
+        cursor: pointer;
+        padding: 10px 20px;
+        border: 2px solid #dee2e6;
+        border-radius: 5px;
+        transition: all 0.3s;
+    }
+    
+    .rating-option:hover {
+        background: #e9ecef;
+    }
+    
+    .rating-option.selected {
+        background: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+    
+    .action-display {
+        font-family: monospace;
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px;
+        margin: 10px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="text-center mb-4">Video Comparison Evaluation</h2>
+        <p class="text-center text-muted">Scenario: {{ comparison.scenario_metadata.name }}</p>
+    </div>
+</div>
+
+<!-- Video Display Section -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h4 class="text-center">Model A</h4>
+        <div class="video-container">
+            <video id="video-a" controls loop>
+                <source src="{{ comparison.model_a_video_path }}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <h4 class="text-center">Model B</h4>
+        <div class="video-container">
+            <video id="video-b" controls loop>
+                <source src="{{ comparison.model_b_video_path }}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+</div>
+
+<!-- Action Sequence Display -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h5>Action Sequence</h5>
+        <div class="action-display">
+            {{ comparison.scenario_metadata.description }}
+        </div>
+    </div>
+</div>
+
+<!-- Evaluation Form -->
+<form id="evaluation-form">
+    <input type="hidden" name="comparison_id" value="{{ comparison.comparison_id }}">
+    
+    {% for dimension in dimensions %}
+    <div class="evaluation-section">
+        <h4>{{ dimension_prompts[dimension].name }}</h4>
+        <p>{{ dimension_prompts[dimension].description }}</p>
+        
+        <h5>{{ dimension_prompts[dimension].prompt }}</h5>
+        
+        <div class="rating-options" data-dimension="{{ dimension }}">
+            <div class="rating-option" data-value="A_much_better">
+                Model A is much better
+            </div>
+            <div class="rating-option" data-value="A_slightly_better">
+                Model A is slightly better
+            </div>
+            <div class="rating-option" data-value="Equal">
+                Both are equally good
+            </div>
+            <div class="rating-option" data-value="B_slightly_better">
+                Model B is slightly better
+            </div>
+            <div class="rating-option" data-value="B_much_better">
+                Model B is much better
+            </div>
+        </div>
+        
+        {% if dimension_prompts[dimension].sub_questions %}
+        <div class="mt-3">
+            <h6>Consider these aspects:</h6>
+            <ul>
+                {% for question in dimension_prompts[dimension].sub_questions %}
+                <li>{{ question }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <!-- Submit Button -->
+    <div class="text-center mt-5 mb-5">
+        <button type="submit" class="btn btn-primary btn-lg" id="submit-btn" disabled>
+            Submit Evaluation
+        </button>
+    </div>
+</form>
+
+<!-- Progress Modal -->
+<div class="modal fade" id="progressModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center p-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Submitting your evaluation...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Sync video playback
+    const videoA = document.getElementById('video-a');
+    const videoB = document.getElementById('video-b');
+    
+    videoA.addEventListener('play', () => {
+        videoB.currentTime = videoA.currentTime;
+        videoB.play();
+    });
+    
+    videoB.addEventListener('play', () => {
+        videoA.currentTime = videoB.currentTime;
+        videoA.play();
+    });
+    
+    videoA.addEventListener('pause', () => videoB.pause());
+    videoB.addEventListener('pause', () => videoA.pause());
+    
+    // Rating selection
+    $('.rating-option').click(function() {
+        const container = $(this).parent();
+        container.find('.rating-option').removeClass('selected');
+        $(this).addClass('selected');
+        
+        // Check if all dimensions are rated
+        checkFormCompletion();
+    });
+    
+    function checkFormCompletion() {
+        const totalDimensions = $('.rating-options').length;
+        const selectedDimensions = $('.rating-options .selected').length;
+        
+        $('#submit-btn').prop('disabled', selectedDimensions < totalDimensions);
+    }
+    
+    // Form submission
+    $('#evaluation-form').submit(function(e) {
+        e.preventDefault();
+        
+        // Collect ratings
+        const dimensionScores = {};
+        const detailedRatings = {};
+        
+        $('.rating-options').each(function() {
+            const dimension = $(this).data('dimension');
+            const selected = $(this).find('.selected');
+            
+            if (selected.length) {
+                const value = selected.data('value');
+                // Convert to A/B/Equal format
+                if (value.includes('A')) {
+                    dimensionScores[dimension] = 'A';
+                } else if (value.includes('B')) {
+                    dimensionScores[dimension] = 'B';
+                } else {
+                    dimensionScores[dimension] = 'Equal';
+                }
+                
+                // Store detailed rating
+                detailedRatings[dimension] = value;
+            }
+        });
+        
+        // Show progress modal
+        $('#progressModal').modal('show');
+        
+        // Submit data
+        $.ajax({
+            url: '/api/submit_evaluation',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                comparison_id: $('input[name="comparison_id"]').val(),
+                dimension_scores: dimensionScores,
+                detailed_ratings: detailedRatings
+            }),
+            success: function(response) {
+                if (response.success) {
+                    window.location.href = response.next_url;
+                }
+            },
+            error: function() {
+                $('#progressModal').modal('hide');
+                alert('An error occurred. Please try again.');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
