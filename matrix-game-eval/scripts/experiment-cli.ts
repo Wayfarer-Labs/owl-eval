@@ -111,8 +111,9 @@ program
       console.log(chalk.white('ID:'), chalk.yellow(experiment.id));
       console.log(chalk.white('Slug:'), chalk.yellow(experiment.slug));
       console.log(chalk.white('Status:'), chalk.yellow(experiment.status));
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
       console.log(chalk.white('\nEvaluation URL:'), 
-        chalk.blue.underline(`https://yourdomain.com/evaluate/${experiment.slug}`));
+        chalk.blue.underline(`${baseUrl}/evaluate/${experiment.slug}`));
       
       console.log(chalk.gray('\nNext steps:'));
       console.log(chalk.gray('1. Generate videos using: python scripts/cli.py generate-videos'));
@@ -212,8 +213,9 @@ program
         console.log(chalk.white('\nProlific Study ID:'), chalk.cyan(experiment.prolificStudyId));
       }
       
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
         console.log(chalk.white('\nEvaluation URL:'), 
-          chalk.blue.underline(`https://yourdomain.com/evaluate/${experiment.slug}`));
+          chalk.blue.underline(`${baseUrl}/evaluate/${experiment.slug}`));
         
       } catch (error) {
         console.error(chalk.red('Error launching experiment:'), error);
