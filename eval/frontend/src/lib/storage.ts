@@ -1,45 +1,61 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-// Tigris S3-compatible configuration using AWS SDK env vars
-const tigrisClient = new S3Client({
-  endpoint: process.env.AWS_ENDPOINT_URL_S3 || 'https://fly.storage.tigris.dev',
-  region: process.env.AWS_REGION || 'auto',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-})
 
-const BUCKET_NAME = process.env.TIGRIS_BUCKET_NAME || 'eval-data'
+// Lazy initialization of Tigris client to ensure environment variables are loaded
+let tigrisClient: S3Client | null = null;
+
+function getTigrisClient(): S3Client {
+  if (!tigrisClient) {
+    
+    tigrisClient = new S3Client({
+      endpoint: process.env.AWS_ENDPOINT_URL_S3 || 'https://fly.storage.tigris.dev',
+      region: process.env.AWS_REGION || 'auto',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
+    });
+  }
+  return tigrisClient;
+}
+
+export function getBucketName(): string {
+  if (!process.env.TIGRIS_BUCKET_NAME) {
+    throw new Error('TIGRIS_BUCKET_NAME environment variable is not set');
+  }
+  return process.env.TIGRIS_BUCKET_NAME;
+}
 
 export async function uploadVideoToTigris(
   file: Buffer,
   key: string,
   contentType: string = 'video/mp4'
 ): Promise<string> {
+  const bucketName = getBucketName();
+  
   const command = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: bucketName,
     Key: key,
     Body: file,
     ContentType: contentType,
-    ACL: 'public-read', // Make this object publicly readable
-  })
+    // Remove ACL - Tigris handles public access differently
+  });
 
-  await tigrisClient.send(command)
+  await getTigrisClient().send(command);
 
   // Return public URL - make sure to use the correct format for Tigris
-  const endpoint = `https://${BUCKET_NAME}.fly.storage.tigris.dev`
-  return `${endpoint}/${key}`
+  const endpoint = `https://${bucketName}.fly.storage.tigris.dev`
+  return `${endpoint}/${key}`;
 }
 
 export async function getSignedVideoUrl(key: string, expiresIn = 3600): Promise<string> {
   const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: getBucketName(),
     Key: key,
   })
 
-  return getSignedUrl(tigrisClient, command, { expiresIn })
+  return getSignedUrl(getTigrisClient(), command, { expiresIn })
 }
 
 // Helper to organize videos by experiment

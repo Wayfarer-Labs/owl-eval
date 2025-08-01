@@ -37,8 +37,8 @@ const client = new S3Client({
   }
 })
 
-const sourceBucket = 'initial-screen-video-library'
-const targetBucket = process.env.TIGRIS_BUCKET_NAME || 'gary-owl-eval-dev'
+const sourceBucket = 'gary-owl-eval' // Production bucket
+const targetBucket = process.env.TIGRIS_BUCKET_NAME || 'gary-owl-eval-dev' // Dev bucket
 
 async function checkObjectExists(bucket, key) {
   try {

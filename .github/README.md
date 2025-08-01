@@ -30,7 +30,7 @@ The platform addresses the critical need for standardized human evaluation metho
 - **CLI**: TypeScript-based command-line interface
 - **Deployment**: Docker containers with GitHub Actions CI/CD
 
-**A comprehensive platform for evaluating and comparing world models through human evaluation studies**
+## Quick Start
 
 ### Prerequisites
 - Node.js 18+
@@ -112,7 +112,6 @@ cd eval
 
 ## Project Structure
 
-### Project Structure
 ```
 owl-eval/
 ├── eval/

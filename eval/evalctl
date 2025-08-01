@@ -1,4 +1,5 @@
 #!/bin/bash
 export NODE_ENV=development
+ORIGINAL_PWD="$(pwd)"
 cd "$(dirname "$0")/frontend"
-npx tsx ../scripts/evalctl.ts "$@"
+ORIGINAL_PWD="$ORIGINAL_PWD" npx tsx ../scripts/evalctl.ts "$@"

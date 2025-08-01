@@ -1,17 +1,18 @@
 #!/usr/bin/env tsx
 
+// Load environment variables FIRST before ANY imports
+import * as dotenv from 'dotenv';
+
+const env = process.env.EVALCTL_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
+dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env' });
+
 import { Command } from 'commander';
 import * as readline from 'readline';
 import { promisify } from 'util';
 import * as path from 'path';
 import chalk from 'chalk';
-import * as dotenv from 'dotenv';
-
-// Load environment variables FIRST before any imports that use them
-// The script runs from the frontend directory via the wrapper
-dotenv.config({ path: '.env.local' });
-dotenv.config({ path: '.env.development' });
-dotenv.config({ path: '.env' });
 
 import { generateSlug, isValidSlug, slugify } from '../frontend/src/lib/utils/slug';
 import { requireAuth, clearAuth } from './auth';
@@ -20,6 +21,13 @@ import { prolificService } from '../frontend/src/lib/services/prolific';
 // Don't import ExperimentService - it uses frontend prisma client
 // import { ExperimentService } from '../frontend/src/lib/experiment-service';
 import { getUserOrganizations } from './cli-organization';
+import { uploadVideoToTigris } from '../frontend/src/lib/storage';
+
+// Show environment info for non-help commands
+const isHelpCommand = process.argv.includes('--help') || process.argv.includes('-h');
+if (!isHelpCommand && process.argv.length > 2) {
+  console.log(chalk.gray(`[${env.toUpperCase()}] Using .env.${env}`));
+}
 
 // Ensure DATABASE_URL is available
 if (!process.env.DATABASE_URL) {
@@ -27,6 +35,14 @@ if (!process.env.DATABASE_URL) {
   console.error(chalk.yellow('💡 Make sure .env.development or .env.local contains DATABASE_URL'));
   process.exit(1);
 }
+
+// Get base URL for API calls - automatically determined by EVALCTL_ENV
+function getBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL || 
+         process.env.NEXT_PUBLIC_BASE_URL || 
+         'http://localhost:3000';
+}
+
 
 // Create readline interface lazily to avoid conflicts with auth
 let rl: readline.Interface | null = null;
@@ -65,12 +81,13 @@ async function selectOrganization(auth: any): Promise<string> {
     console.log(chalk.white(`${index + 1}. ${org.name} (${org.slug}) - ${membership.role}`));
   });
   
-  const { rl, question } = getReadline();
+  const { rl: readlineInterface, question } = getReadline();
   const choice = await question(chalk.cyan('\nEnter organization number: '));
   const index = parseInt(choice) - 1;
   
-  // Close readline interface
-  rl.close();
+  // Close readline interface and reset global variable
+  readlineInterface.close();
+  rl = null;
   
   if (index < 0 || index >= userOrganizations.length) {
     console.log(chalk.red('❌ Invalid selection'));
@@ -85,7 +102,7 @@ async function selectOrganization(auth: any): Promise<string> {
 const program = new Command();
 
 program
-  .name('experiment-cli')
+  .name('evalctl')
   .description('CLI for managing evaluation experiments')
   .version('1.0.0');
 
@@ -101,8 +118,13 @@ program
     await requireAuth('create experiments', async (auth) => {
       console.log(chalk.blue.bold('\n🧪 Creating a new experiment\n'));
 
+      let rl: readline.Interface | null = null;
       try {
-      const { question } = getReadline();
+        // Get organization first
+        const organizationId = await selectOrganization(auth);
+        
+        const { rl: readlineInterface, question } = getReadline();
+        rl = readlineInterface;
       
       // Interactive prompts
       const name = options.name || await question(chalk.cyan('Experiment name: '));
@@ -135,23 +157,10 @@ program
       const modeInput = await question(chalk.cyan('Select evaluation mode (1 or 2): '));
       const evaluationMode = modeInput === '2' ? 'single_video' : 'comparison';
       
-      // Model configuration
-      console.log(chalk.blue('\n📊 Model Configuration'));
+      // Scenario configuration only - models will be auto-discovered from videos
+      console.log(chalk.blue('\n📊 Scenario Configuration'));
       
-      let models: string[] = [];
       let scenarios: string[] = [];
-      
-      if (evaluationMode === 'comparison') {
-        const modelsInput = await question(
-          chalk.cyan('Models to compare (comma-separated, e.g., "model1,model2"): ')
-        );
-        models = modelsInput.split(',').map((m: string) => m.trim());
-      } else {
-        const modelsInput = await question(
-          chalk.cyan('Models to evaluate (comma-separated, e.g., "model1,model2,model3"): ')
-        );
-        models = modelsInput.split(',').map((m: string) => m.trim());
-      }
       
       // Scenario configuration
       const scenariosInput = await question(
@@ -168,11 +177,11 @@ program
           group: group || null,
           status: 'draft',
           evaluationMode,
+          organizationId,  // Add missing organizationId
           createdBy: auth.userId,
           config: {
-            models,
             scenarios,
-            evaluationsPerComparison: evaluationMode === 'comparison' ? 5 : 3,
+            // Models will be auto-discovered from uploaded videos during task creation
             dimensions: [
               'overall_quality',
               'controllability',
@@ -192,20 +201,24 @@ program
         console.log(chalk.white('Group:'), chalk.yellow(experiment.group));
       }
       console.log(chalk.white('\nEvaluation URL:'), 
-        chalk.blue.underline(`localhost:3000/evaluate/${experiment.slug}`));
+        chalk.blue.underline(`${getBaseUrl().replace('http://', '').replace('https://', '')}/evaluate/${experiment.slug}`));
       
       console.log(chalk.gray('\nNext steps:'));
-      console.log(chalk.gray('1. Upload videos using: experiment-cli upload-videos --dir <directory>'));
+      console.log(chalk.gray('1. Upload videos using: ./evalctl upload-videos --dir <directory>'));
       if (experiment.evaluationMode === 'single_video') {
-        console.log(chalk.gray('2. Create video tasks using: experiment-cli create-video-tasks --experiment <slug>'));
+        console.log(chalk.gray('2. Create video tasks using: ./evalctl create-video-tasks --experiment <slug>'));
       } else {
-        console.log(chalk.gray('2. Assign videos using: experiment-cli assign-videos --experiment <slug>'));
+        console.log(chalk.gray('2. Assign videos using: ./evalctl assign-videos --experiment <slug>'));
       }
-      console.log(chalk.gray('3. Launch experiment using: experiment-cli launch'));
+      console.log(chalk.gray('3. Launch experiment using: ./evalctl launch'));
       
       } catch (error) {
         console.error(chalk.red('Error creating experiment:'), error);
       } finally {
+        // Clean up readline interface
+        if (rl) {
+          rl.close();
+        }
         await prisma.$disconnect();
       }
     }, true); // Require admin permissions
@@ -223,11 +236,43 @@ program
       try {
         const organizationId = await selectOrganization(auth);
         
-        // Build participant filter based on includeAnonymous setting
-        const participantFilter = options.includeAnonymous ? {
-          status: {
-            not: 'returned'  // Always exclude returned participants
+        // Get experiments first to check which have Prolific integration
+        const experimentsForFilter = await prisma.experiment.findMany({
+          where: {
+            organizationId,
+            archived: false,
+            ...(options.group && { group: options.group }),
+          },
+          select: {
+            id: true,
+            prolificStudyId: true
           }
+        });
+        
+        // Build participant filter based on includeAnonymous setting and Prolific integration
+        // For Prolific experiments, only count approved participants
+        // For non-Prolific experiments, count active/completed/approved participants
+        const participantFilter = options.includeAnonymous ? {
+          AND: [
+            {
+              OR: experimentsForFilter.map(exp => ({
+                AND: [
+                  { experimentId: exp.id },
+                  {
+                    status: {
+                      in: exp.prolificStudyId ? ['approved'] : ['active', 'completed', 'approved']
+                    }
+                  }
+                ]
+              }))
+            },
+            {
+              OR: [
+                { prolificId: { not: null } },  // Prolific participants
+                { sessionId: { startsWith: 'anon-session-' } }  // Anonymous participants
+              ]
+            }
+          ]
         } : {
           AND: [
             {
@@ -238,9 +283,19 @@ program
               }
             },
             {
-              status: {
-                not: 'returned'  // Always exclude returned participants
-              }
+              OR: experimentsForFilter.map(exp => ({
+                AND: [
+                  { experimentId: exp.id },
+                  {
+                    status: {
+                      in: exp.prolificStudyId ? ['approved'] : ['active', 'completed', 'approved']
+                    }
+                  }
+                ]
+              }))
+            },
+            {
+              prolificId: { not: null }  // Only Prolific participants, exclude anonymous
             }
           ]
         };
@@ -307,6 +362,8 @@ program
       }
       } catch (error) {
         console.error(chalk.red('Error listing experiments:'), error);
+      } finally {
+        await prisma.$disconnect();
       }
     });
   });
@@ -457,6 +514,32 @@ program
   .action(async (slug) => {
     await requireAuth('view experiment stats', async () => {
       try {
+        // First get experiment to check if it has Prolific integration
+        const baseExperiment = await prisma.experiment.findUnique({
+          where: { slug },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            evaluationMode: true,
+            prolificStudyId: true,
+            config: true,
+            createdAt: true,
+            startedAt: true,
+            completedAt: true
+          }
+        });
+        
+        if (!baseExperiment) {
+          console.log(chalk.red('Experiment not found'));
+          return;
+        }
+        
+        // Determine participant status filter based on Prolific integration
+        const participantStatusFilter = baseExperiment.prolificStudyId 
+          ? ['approved']  // For Prolific experiments, only count approved
+          : ['active', 'completed', 'approved'];  // For non-Prolific experiments, count all valid statuses
+        
         const experiment = await prisma.experiment.findUnique({
         where: { slug },
         include: {
@@ -464,7 +547,20 @@ program
             select: {
               twoVideoComparisonTasks: true,
               singleVideoEvaluationTasks: true,
-              participants: true,
+              participants: {
+                where: {
+                  AND: [
+                    {
+                      status: {
+                        in: participantStatusFilter
+                      }
+                    },
+                    {
+                      prolificId: { not: null }  // Only Prolific participants, exclude anonymous
+                    }
+                  ]
+                }
+              },
               twoVideoComparisonSubmissions: true,
               singleVideoEvaluationSubmissions: true,
             }
@@ -558,7 +654,7 @@ program
         console.log(chalk.blue.bold('\n📹 Video Library\n'));
         
         // Use new videos API with metadata support
-        let url = 'http://localhost:3000/api/videos';
+        let url = `${getBaseUrl()}/api/videos`;
         const params = new URLSearchParams();
         
         if (options.model) params.append('model', options.model);
@@ -579,7 +675,7 @@ program
         
         if (videos.length === 0) {
           console.log(chalk.gray('No videos found in library.'));
-          console.log(chalk.gray('Upload videos using: experiment-cli upload-videos --dir <directory>'));
+          console.log(chalk.gray('Upload videos using: ./evalctl upload-videos --dir <directory>'));
           return;
         }
         
@@ -632,7 +728,7 @@ program
         console.log(chalk.blue.bold('\n✏️  Bulk editing videos\n'));
         
         // Get videos to edit
-        let url = 'http://localhost:3000/api/videos';
+        let url = `${getBaseUrl()}/api/videos`;
         const params = new URLSearchParams();
         
         if (options.model) params.append('model', options.model);
@@ -707,7 +803,7 @@ program
         
         // Apply bulk edits
         const videoIds = videos.map((v: any) => v.id);
-        const bulkEditResponse = await fetch('http://localhost:3000/api/videos/bulk-edit', {
+        const bulkEditResponse = await fetch(`${getBaseUrl()}/api/videos/bulk-edit`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json'
@@ -732,6 +828,403 @@ program
     }, true);
   });
 
+// Upload videos command
+program
+  .command('upload-videos')
+  .description('Upload videos from a directory to the video library')
+  .option('-d, --dir <directory>', 'Directory containing video files to upload')
+  .option('-m, --model <model>', 'Model name to associate with uploaded videos')
+  .action(async (options) => {
+    await requireAuth('upload videos', async (auth) => {
+      const { spawn } = require('child_process');
+      const fs = require('fs');
+      const path = require('path');
+
+      try {
+        if (!options.dir) {
+          console.error(chalk.red('❌ Directory is required. Use --dir <directory>'));
+          process.exit(1);
+        }
+
+        // Resolve path relative to where the command was run, not where the script is located
+        const originalPwd = process.env.ORIGINAL_PWD || process.cwd();
+        const videoDir = path.resolve(originalPwd, options.dir);
+
+        // Check if directory exists
+        if (!fs.existsSync(videoDir)) {
+          console.error(chalk.red(`❌ Directory not found: ${videoDir}`));
+          process.exit(1);
+        }
+
+        // Get all video files from directory
+        const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+        const videoFiles = fs.readdirSync(videoDir)
+          .filter((file: string) => videoExtensions.some(ext => file.toLowerCase().endsWith(ext)))
+          .map((file: string) => path.join(videoDir, file));
+
+        if (videoFiles.length === 0) {
+          console.error(chalk.red(`❌ No video files found in: ${videoDir}`));
+          process.exit(1);
+        }
+
+        console.log(chalk.blue(`📁 Found ${videoFiles.length} video files in ${videoDir}`));
+        console.log(chalk.blue(`🚀 Starting upload...\n`));
+
+        // Get organization once for all uploads
+        const organizationId = await selectOrganization(auth);
+        const results: any[] = [];
+
+        // Upload function using existing web UI functions
+        async function uploadVideo(filePath: string): Promise<any> {
+          const fileName = path.basename(filePath);
+          console.log(chalk.gray(`📤 Uploading: ${fileName}`));
+          
+          try {
+            // Read file as buffer (same as web UI)
+            const fileBuffer = fs.readFileSync(filePath);
+            
+            // Generate key for video library (same logic as web UI route)
+            const fileExtension = fileName.split('.').pop() || 'mp4';
+            const uniqueId = Math.random().toString(36).substring(2, 10); // 8 char random string
+            const sanitizedName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+            const key = `video-library/${uniqueId}_${sanitizedName}`;
+            
+            // Upload to Tigris using existing function
+            const videoUrl = await uploadVideoToTigris(fileBuffer, key, 'video/mp4');
+
+            // Save video record to database (same as web UI route)
+            const video = await prisma.video.create({
+              data: {
+                key,
+                name: fileName,
+                url: videoUrl,
+                size: fileBuffer.length,
+                organizationId,
+                tags: [],
+                groups: [],
+                modelName: options.model || null,
+                metadata: {
+                  originalName: fileName,
+                  mimeType: 'video/mp4',
+                  uploadedBy: auth.userId || 'cli-user',
+                  modelName: options.model || null
+                }
+              }
+            });
+            
+            console.log(chalk.green(`✅ Uploaded: ${fileName}`));
+            return {
+              success: true,
+              fileName,
+              url: videoUrl,
+              key,
+              id: video.id
+            };
+            
+          } catch (error) {
+            console.error(chalk.red(`❌ Failed to upload ${fileName}: ${error}`));
+            return {
+              success: false,
+              fileName,
+              error: error.message || 'Upload failed'
+            };
+          }
+        }
+
+        // Upload all videos sequentially
+        for (const filePath of videoFiles) {
+          const result = await uploadVideo(filePath);
+          results.push(result);
+          
+          // Small delay between uploads to avoid overwhelming the server
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // Summary
+        const successful = results.filter(r => r.success);
+        const failed = results.filter(r => !r.success);
+
+        console.log(chalk.blue.bold(`\n📊 Upload Summary:`));
+        console.log(chalk.green(`✅ Successful: ${successful.length}`));
+        console.log(chalk.red(`❌ Failed: ${failed.length}`));
+
+        if (successful.length > 0) {
+          console.log(chalk.blue(`\n📋 Uploaded Videos:`));
+          successful.forEach((result: any) => {
+            console.log(chalk.gray(`  • ${result.fileName}`));
+          });
+        }
+
+        if (failed.length > 0) {
+          console.log(chalk.red(`\n💥 Failed Uploads:`));
+          failed.forEach((result: any) => {
+            console.log(chalk.red(`  • ${result.fileName}: ${result.error}`));
+          });
+        }
+
+        console.log(chalk.green.bold(`\n🎉 Upload complete! Videos are now available in the Video Library.`));
+
+      } catch (error) {
+        console.error(chalk.red('Error uploading videos:'), error);
+      } finally {
+        await prisma.$disconnect();
+      }
+    });
+  });
+
+// Sync video library with Tigris storage
+program
+  .command('sync-videos')
+  .description('Sync video library database with Tigris storage (Tigris as source of truth)')
+  .option('--dry-run', 'Show what would be synced without making changes')
+  .action(async (options) => {
+    await requireAuth('sync video library', async (auth) => {
+      const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
+      
+      try {
+        console.log(chalk.blue.bold('\n🔄 Syncing Video Library with Tigris Storage\n'));
+        
+        // Initialize Tigris client (same config as web UI)
+        const tigrisClient = new S3Client({
+          endpoint: process.env.AWS_ENDPOINT_URL_S3 || 'https://fly.storage.tigris.dev',
+          region: process.env.AWS_REGION || 'auto',
+          credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+          },
+        });
+
+        const bucketName = process.env.TIGRIS_BUCKET_NAME || 'eval-data';
+        
+        // List all video-library objects in Tigris
+        console.log(chalk.gray('📋 Fetching videos from Tigris storage...'));
+        const listCommand = new ListObjectsV2Command({
+          Bucket: bucketName,
+          Prefix: 'video-library/',
+        });
+        
+        const tigrisResponse = await tigrisClient.send(listCommand);
+        const tigrisVideos = tigrisResponse.Contents || [];
+        
+        console.log(chalk.blue(`Found ${tigrisVideos.length} videos in Tigris storage`));
+        
+        // Get all video records from database
+        console.log(chalk.gray('📋 Fetching videos from database...'));
+        const dbVideos = await prisma.video.findMany({
+          where: {
+            key: {
+              startsWith: 'video-library/'
+            }
+          },
+          select: {
+            id: true,
+            key: true,
+            name: true,
+            url: true,
+            size: true,
+            uploadedAt: true
+          }
+        });
+        
+        console.log(chalk.blue(`Found ${dbVideos.length} videos in database`));
+        
+        // Create maps for comparison
+        const tigrisKeys = new Set(tigrisVideos.map(obj => obj.Key));
+        const dbKeys = new Set(dbVideos.map(video => video.key));
+        
+        // Find orphaned database records (in DB but not in Tigris)
+        const orphanedDbRecords = dbVideos.filter(video => !tigrisKeys.has(video.key));
+        
+        // Find missing database records (in Tigris but not in DB)
+        const missingDbRecords = tigrisVideos.filter(obj => !dbKeys.has(obj.Key));
+        
+        console.log(chalk.white('\n📊 Sync Analysis (Tigris as source of truth):'));
+        console.log(chalk.blue(`🎯 Target: ${tigrisVideos.length} videos in Tigris storage`));
+        console.log(chalk.blue(`📄 Current: ${dbVideos.length} videos in database`));
+        console.log(chalk.green(`✅ In sync: ${tigrisVideos.length - missingDbRecords.length} videos`));
+        console.log(chalk.red(`❌ Orphaned DB records: ${orphanedDbRecords.length} (will be removed)`));
+        console.log(chalk.yellow(`➕ Missing DB records: ${missingDbRecords.length} (will be created)`));
+        
+        if (orphanedDbRecords.length > 0) {
+          console.log(chalk.red('\n🗑️  Database Records to Remove:'));
+          orphanedDbRecords.forEach(video => {
+            console.log(chalk.gray(`  • ${video.name} (${video.key})`));
+          });
+        }
+        
+        if (missingDbRecords.length > 0) {
+          console.log(chalk.yellow('\n➕ Database Records to Create:'));
+          missingDbRecords.forEach(obj => {
+            const sizeKB = obj.Size ? Math.round(obj.Size / 1024) : 0;
+            const fileName = obj.Key?.split('/').pop()?.split('_').slice(1).join('_') || 'unknown';
+            console.log(chalk.gray(`  • ${fileName} (${obj.Key}) - ${sizeKB} KB`));
+          });
+        }
+        
+        if (!options.dryRun) {
+          // Remove orphaned database records
+          if (orphanedDbRecords.length > 0) {
+            console.log(chalk.yellow('\n🧹 Removing orphaned database records...'));
+            const deleteResult = await prisma.video.deleteMany({
+              where: {
+                id: {
+                  in: orphanedDbRecords.map(v => v.id)
+                }
+              }
+            });
+            console.log(chalk.green(`✅ Removed ${deleteResult.count} orphaned database records`));
+          }
+          
+          // Create missing database records
+          if (missingDbRecords.length > 0) {
+            console.log(chalk.yellow('\n➕ Creating missing database records...'));
+            const organizationId = await selectOrganization(auth);
+            
+            for (const obj of missingDbRecords) {
+              const key = obj.Key!;
+              const fileName = key.split('/').pop()?.split('_').slice(1).join('_') || 'unknown';
+              const bucketName = process.env.TIGRIS_BUCKET_NAME || 'eval-data';
+              const videoUrl = `https://${bucketName}.fly.storage.tigris.dev/${key}`;
+              
+              await prisma.video.create({
+                data: {
+                  key,
+                  name: fileName,
+                  url: videoUrl,
+                  size: obj.Size || 0,
+                  organizationId,
+                  tags: [],
+                  groups: [],
+                  metadata: {
+                    originalName: fileName,
+                    mimeType: 'video/mp4',
+                    uploadedBy: 'sync-command',
+                    syncedAt: new Date().toISOString()
+                  }
+                }
+              });
+            }
+            console.log(chalk.green(`✅ Created ${missingDbRecords.length} missing database records`));
+          }
+          
+          console.log(chalk.green('\n🎉 Database successfully synced with Tigris storage!'));
+          console.log(chalk.blue(`📊 Final state: ${tigrisVideos.length} videos in both storage and database`));
+        } else {
+          console.log(chalk.blue('\n🔍 Dry run complete - no changes made'));
+          console.log(chalk.gray('Run without --dry-run to sync database with Tigris storage'));
+        }
+        
+      } catch (error) {
+        console.error(chalk.red('Error syncing video library:'), error);
+      } finally {
+        await prisma.$disconnect();
+      }
+    });
+  });
+
+// Clear all video data command
+program
+  .command('clear-videos')
+  .description('Delete ALL video data from both database and storage (DESTRUCTIVE)')
+  .option('--confirm', 'Required confirmation flag to proceed with deletion')
+  .option('--storage-only', 'Only delete from storage, keep database records')
+  .option('--db-only', 'Only delete from database, keep storage files')
+  .action(async (options) => {
+    await requireAuth('clear video data', async (auth) => {
+      try {
+        if (!options.confirm) {
+          console.log(chalk.red.bold('\n⚠️  WARNING: This will DELETE ALL video data!\n'));
+          console.log(chalk.gray('This command will:'));
+          console.log(chalk.gray('• Delete all video files from Tigris storage'));
+          console.log(chalk.gray('• Delete all video records from database'));
+          console.log(chalk.gray('• This action CANNOT be undone!'));
+          console.log(chalk.yellow('\nTo proceed, add the --confirm flag:'));
+          console.log(chalk.white('  ./evalctl clear-videos --confirm'));
+          console.log(chalk.gray('\nOptions:'));
+          console.log(chalk.gray('  --storage-only  Only delete files from storage'));
+          console.log(chalk.gray('  --db-only       Only delete database records'));
+          return;
+        }
+
+        console.log(chalk.red.bold('\n🗑️  Clearing ALL Video Data\n'));
+        
+        const organizationId = await selectOrganization(auth);
+        let deletedFiles = 0;
+        let deletedRecords = 0;
+
+        // Delete from storage unless --db-only
+        if (!options.dbOnly) {
+          console.log(chalk.yellow('🧹 Deleting files from Tigris storage...'));
+          
+          const { S3Client, ListObjectsV2Command, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+          const tigrisClient = new S3Client({
+            endpoint: process.env.AWS_ENDPOINT_URL_S3 || 'https://fly.storage.tigris.dev',
+            region: process.env.AWS_REGION || 'auto',
+            credentials: {
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+            },
+          });
+
+          const bucketName = process.env.TIGRIS_BUCKET_NAME;
+          if (!bucketName) {
+            throw new Error('TIGRIS_BUCKET_NAME environment variable is not set');
+          }
+          
+          // List all video-library objects
+          const listCommand = new ListObjectsV2Command({
+            Bucket: bucketName,
+            Prefix: 'video-library/',
+          });
+          
+          const response = await tigrisClient.send(listCommand);
+          const objects = response.Contents || [];
+          
+          console.log(chalk.blue(`Found ${objects.length} files to delete from storage`));
+          
+          // Delete each object
+          for (const obj of objects) {
+            if (obj.Key) {
+              const deleteCommand = new DeleteObjectCommand({
+                Bucket: bucketName,
+                Key: obj.Key,
+              });
+              await tigrisClient.send(deleteCommand);
+              deletedFiles++;
+              console.log(chalk.gray(`  ✓ Deleted: ${obj.Key}`));
+            }
+          }
+        }
+
+        // Delete from database unless --storage-only  
+        if (!options.storageOnly) {
+          console.log(chalk.yellow('🧹 Deleting records from database...'));
+          
+          const deleteResult = await prisma.video.deleteMany({
+            where: {
+              organizationId,
+              key: {
+                startsWith: 'video-library/'
+              }
+            }
+          });
+          deletedRecords = deleteResult.count;
+          console.log(chalk.blue(`Deleted ${deletedRecords} video records from database`));
+        }
+
+        console.log(chalk.green.bold('\n✅ Video data cleared successfully!'));
+        console.log(chalk.white(`📁 Storage files deleted: ${deletedFiles}`));
+        console.log(chalk.white(`📄 Database records deleted: ${deletedRecords}`));
+        console.log(chalk.gray('\nYou can now upload fresh videos with model information.'));
+        
+      } catch (error) {
+        console.error(chalk.red('Error clearing video data:'), error);
+      } finally {
+        await prisma.$disconnect();
+      }
+    }, true);
+  });
+
 // Create video tasks command
 program
   .command('create-video-tasks')
@@ -741,6 +1234,7 @@ program
   .option('--seed <seed>', 'Random seed for reproducible assignment')
   .action(async (options) => {
     await requireAuth('create video tasks', async () => {
+      let rl: readline.Interface | null = null;
       try {
         console.log(chalk.blue.bold('\n🎬 Creating Single Video Evaluation Tasks\n'));
         
@@ -753,7 +1247,7 @@ program
         // Get experiment
         const experiment = await prisma.experiment.findUnique({
           where: { slug: experimentSlug },
-          include: { videoTasks: true }
+          include: { singleVideoEvaluationTasks: true }
         });
         
         if (!experiment) {
@@ -767,7 +1261,7 @@ program
         }
         
         // Get video library
-        const response = await fetch('http://localhost:3000/api/videos');
+        const response = await fetch(`${getBaseUrl()}/api/videos`);
         if (!response.ok) {
           throw new Error(`Failed to fetch video library: ${response.status}`);
         }
@@ -775,7 +1269,7 @@ program
         
         if (videos.length === 0) {
           console.log(chalk.red('No videos found in library.'));
-          console.log(chalk.gray('Upload videos first using: experiment-cli upload-videos --dir <directory>'));
+          console.log(chalk.gray('Upload videos first using: ./evalctl upload-videos --dir <directory>'));
           return;
         }
         
@@ -783,68 +1277,206 @@ program
         console.log(chalk.white(`Available videos: ${videos.length}`));
         
         const config = experiment.config as any;
-        const models = config?.models || [];
         const scenarios = config?.scenarios || [];
+        
+        // Handle empty scenarios - add a default scenario
+        const validScenarios = scenarios.filter((s: any) => s && s.trim && s.trim().length > 0);
+        if (validScenarios.length === 0) {
+          console.log(chalk.yellow('⚠ No valid scenarios found in experiment config. Adding default scenario "default".'));
+          scenarios.length = 0; // Clear array
+          scenarios.push('default');
+          
+          // Update experiment config
+          await prisma.experiment.update({
+            where: { id: experiment.id },
+            data: {
+              config: {
+                ...config,
+                scenarios: ['default']
+              }
+            }
+          });
+        }
+        
+        // Auto-discover available models from uploaded videos
+        const availableModels = Array.from(new Set(
+          videos.filter((v: any) => v.modelName).map((v: any) => v.modelName)
+        ));
+        
+        if (availableModels.length === 0) {
+          console.log(chalk.red('No videos with model names found in library.'));
+          console.log(chalk.gray('Upload videos with model names using: ./evalctl upload-videos --dir <directory> --model <model-name>'));
+          return;
+        }
+        
+        console.log(chalk.white(`Auto-discovered models: ${chalk.green(availableModels.join(', '))}`));
+        
+        // Show video counts per model
+        console.log(chalk.blue('\n📊 Videos available per model:'));
+        availableModels.forEach(model => {
+          const modelVideos = videos.filter((v: any) => v.modelName === model);
+          console.log(chalk.white(`  ${model}: ${chalk.green(modelVideos.length)} videos`));
+        });
+        
+        // Ask user to select which model to evaluate
+        const { rl: readlineInterface, question } = getReadline();
+        rl = readlineInterface;
+        console.log(chalk.blue('\n🎯 Select model to evaluate:'));
+        availableModels.forEach((model, index) => {
+          console.log(chalk.gray(`  ${index + 1}. ${model}`));
+        });
+        
+        const modelChoice = await question(chalk.cyan('Enter model number or name: '));
+        
+        let selectedModel: string;
+        const choiceNum = parseInt(modelChoice);
+        if (!isNaN(choiceNum) && choiceNum >= 1 && choiceNum <= availableModels.length) {
+          selectedModel = availableModels[choiceNum - 1];
+        } else if (availableModels.includes(modelChoice)) {
+          selectedModel = modelChoice;
+        } else {
+          console.log(chalk.red(`Invalid choice: ${modelChoice}`));
+          return;
+        }
+        
+        console.log(chalk.green(`\n✅ Selected model: ${selectedModel}`));
+        
+        // Get all videos for the selected model
+        const modelVideos = videos.filter((v: any) => v.modelName === selectedModel);
+        console.log(chalk.white(`Found ${modelVideos.length} videos for ${selectedModel}`));
         
         const videoTasks: any[] = [];
         
-        console.log(chalk.blue('\n🤖 Auto-creating video tasks based on metadata...\n'));
+        console.log(chalk.blue('\n🎬 Creating video evaluation tasks...\n'));
         
-        for (const scenario of scenarios) {
-          for (const model of models) {
-            // Find video by metadata first, fallback to filename patterns
-            let video = videos.find((v: any) => 
-              v.modelName === model && v.scenarioId === scenario
-            );
-            
-            // Fallback to filename patterns if metadata not available
-            if (!video) {
-              video = videos.find((v: any) => 
-                v.name.toLowerCase().includes(scenario.toLowerCase()) && 
-                v.name.toLowerCase().includes(model.toLowerCase())
-              );
+        // Create one task per video for the selected model
+        modelVideos.forEach((video: any, index: number) => {
+          videoTasks.push({
+            experimentId: experiment.id,
+            scenarioId: 'single-evaluation', // Use a generic scenario name
+            modelName: selectedModel,
+            videoPath: video.url || video.path,
+            videoId: video.id,
+            metadata: {
+              videoName: video.name,
+              videoSize: video.size,
+              videoDuration: video.duration,
+              taskIndex: index + 1
             }
-            
-            if (video) {
-              videoTasks.push({
-                experimentId: experiment.id,
-                scenarioId: scenario,
-                modelName: model,
-                videoPath: video.url || video.path,
-                videoId: video.id,
-                metadata: {
-                  videoName: video.name,
-                  videoSize: video.size,
-                  videoDuration: video.duration
-                }
-              });
-              
-              console.log(chalk.green(`✓ ${scenario}: ${model}`));
-              console.log(chalk.gray(`  Video: ${video.name}\n`));
-            } else {
-              console.log(chalk.yellow(`⚠ ${scenario}: ${model} - video not found`));
-            }
-          }
-        }
+          });
+          
+          console.log(chalk.green(`✓ Task ${index + 1}: ${video.name}`));
+        });
         
         if (videoTasks.length > 0) {
+          // Update experiment config with selected model
+          await prisma.experiment.update({
+            where: { id: experiment.id },
+            data: {
+              config: {
+                ...config,
+                models: [selectedModel],
+                scenarios: ['single-evaluation']
+              }
+            }
+          });
+          
           // Create video tasks
-          await prisma.videoTask.createMany({
+          await prisma.singleVideoEvaluationTask.createMany({
             data: videoTasks
           });
           
-          console.log(chalk.green.bold(`\n✅ Created ${videoTasks.length} video tasks!`));
-          console.log(chalk.white('Tasks created for:'));
-          videoTasks.forEach(task => {
-            console.log(chalk.gray(`  - ${task.scenarioId}: ${task.modelName}`));
-          });
+          console.log(chalk.green.bold(`\n✅ Created ${videoTasks.length} video evaluation tasks!`));
+          console.log(chalk.white(`All tasks are for model: ${chalk.green(selectedModel)}`));
+          console.log(chalk.gray(`Each video will be evaluated individually on a 1-5 scale`));
         } else {
-          console.log(chalk.red('\nNo matching videos found. Check your video metadata or filename patterns.'));
-          console.log(chalk.gray('Expected: videos with modelName and scenarioId metadata, or pattern {scenario}_{model}.mp4'));
+          console.log(chalk.red(`\nNo videos found for model: ${selectedModel}`));
         }
         
       } catch (error) {
         console.error(chalk.red('Error creating video tasks:'), error);
+      } finally {
+        // Clean up readline interface
+        if (rl) {
+          rl.close();
+        }
+        await prisma.$disconnect();
+      }
+    }, true);
+  });
+
+// Reset experiment command
+program
+  .command('reset')
+  .description('Reset an experiment by deleting all tasks (keeps experiment config)')
+  .option('-e, --experiment <slug>', 'Experiment slug')
+  .option('--confirm', 'Required confirmation flag to proceed with deletion')
+  .action(async (options) => {
+    await requireAuth('delete video tasks', async () => {
+      try {
+        if (!options.confirm) {
+          console.log(chalk.red.bold('\n⚠️  WARNING: This will RESET the experiment!\n'));
+          console.log(chalk.gray('This will:'));
+          console.log(chalk.gray('• Delete all video evaluation tasks'));
+          console.log(chalk.gray('• Delete all comparison tasks'));
+          console.log(chalk.gray('• Keep the experiment config intact'));
+          console.log(chalk.gray('• This action CANNOT be undone!'));
+          console.log(chalk.yellow('\nTo proceed, add the --confirm flag:'));
+          console.log(chalk.white('  ./evalctl reset --experiment <slug> --confirm'));
+          return;
+        }
+
+        console.log(chalk.red.bold('\n🔄 Resetting Experiment\n'));
+        
+        let experimentSlug = options.experiment;
+        if (!experimentSlug) {
+          const { question } = getReadline();
+          experimentSlug = await question(chalk.cyan('Experiment slug: '));
+        }
+        
+        // Get experiment
+        const experiment = await prisma.experiment.findUnique({
+          where: { slug: experimentSlug },
+          include: { 
+            singleVideoEvaluationTasks: true,
+            twoVideoComparisonTasks: true 
+          }
+        });
+        
+        if (!experiment) {
+          console.log(chalk.red(`Experiment "${experimentSlug}" not found.`));
+          return;
+        }
+
+        console.log(chalk.white(`Found experiment: ${experiment.name}`));
+        console.log(chalk.white(`Single video tasks: ${experiment.singleVideoEvaluationTasks.length}`));
+        console.log(chalk.white(`Comparison tasks: ${experiment.twoVideoComparisonTasks.length}`));
+
+        let deletedTasks = 0;
+
+        // Delete single video evaluation tasks
+        if (experiment.singleVideoEvaluationTasks.length > 0) {
+          const result = await prisma.singleVideoEvaluationTask.deleteMany({
+            where: { experimentId: experiment.id }
+          });
+          deletedTasks += result.count;
+          console.log(chalk.blue(`Deleted ${result.count} single video evaluation tasks`));
+        }
+
+        // Delete comparison tasks  
+        if (experiment.twoVideoComparisonTasks.length > 0) {
+          const result = await prisma.twoVideoComparisonTask.deleteMany({
+            where: { experimentId: experiment.id }
+          });
+          deletedTasks += result.count;
+          console.log(chalk.blue(`Deleted ${result.count} comparison tasks`));
+        }
+
+        console.log(chalk.green.bold(`\n✅ Reset complete! Deleted ${deletedTasks} tasks.`));
+        console.log(chalk.gray('The experiment is now ready for fresh task creation.'));
+        
+      } catch (error) {
+        console.error(chalk.red('Error deleting tasks:'), error);
       } finally {
         await prisma.$disconnect();
       }
@@ -870,11 +1502,29 @@ program
       try {
         const { question } = getReadline();
         
-        // Get models and scenarios
-        const modelsInput = options.models || await question(
-          chalk.cyan('Models to compare (comma-separated): ')
-        );
-        const models = modelsInput.split(',').map((m: string) => m.trim());
+        // Auto-discover available models from uploaded videos
+        const videoResponse = await fetch(`${getBaseUrl()}/api/videos`);
+        if (!videoResponse.ok) {
+          throw new Error(`Failed to fetch video library: ${videoResponse.status}`);
+        }
+        const videos = await videoResponse.json();
+        
+        const availableModels = Array.from(new Set(
+          videos.filter((v: any) => v.modelName).map((v: any) => v.modelName)
+        ));
+        
+        if (availableModels.length === 0) {
+          console.log(chalk.red('No videos with model names found in library.'));
+          console.log(chalk.gray('Upload videos with model names first using: ./evalctl upload-videos --dir <directory> --model <model-name>'));
+          return;
+        }
+        
+        console.log(chalk.white(`Auto-discovered models: ${chalk.green(availableModels.join(', '))}`));
+        
+        // Allow manual override if models option is provided
+        const models = options.models ? 
+          options.models.split(',').map((m: string) => m.trim()) : 
+          availableModels;
         
         const scenariosInput = options.scenarios || await question(
           chalk.cyan('Scenarios (comma-separated): ')
@@ -971,7 +1621,7 @@ program
         // Get experiment
         const experiment = await prisma.experiment.findUnique({
           where: { slug: experimentSlug },
-          include: { comparisons: true }
+          include: { twoVideoComparisonTasks: true }
         });
         
         if (!experiment) {
@@ -980,7 +1630,7 @@ program
         }
         
         // Get video library
-        const response = await fetch('http://localhost:3000/api/video-library');
+        const response = await fetch(`${getBaseUrl()}/api/video-library`);
         if (!response.ok) {
           throw new Error(`Failed to fetch video library: ${response.status}`);
         }
@@ -1003,23 +1653,34 @@ program
           console.log(chalk.blue('\n🤖 Auto-assigning videos based on metadata...\n'));
           
           // Use new video library API that supports metadata
-          const videoResponse = await fetch('http://localhost:3000/api/videos');
+          const videoResponse = await fetch(`${getBaseUrl()}/api/videos`);
           if (!videoResponse.ok) {
             throw new Error(`Failed to fetch video library: ${videoResponse.status}`);
           }
           const videosWithMetadata = await videoResponse.json();
           
           const config = experiment.config as any;
-          const models = config?.models || [];
           const scenarios = config?.scenarios || [];
+          
+          // Auto-discover available models from uploaded videos
+          const availableModels = Array.from(new Set(
+            videosWithMetadata.filter((v: any) => v.modelName).map((v: any) => v.modelName)
+          ));
+          
+          if (availableModels.length === 0) {
+            console.log(chalk.red('No videos with model names found in library.'));
+            return;
+          }
+          
+          console.log(chalk.white(`Auto-discovered models: ${chalk.green(availableModels.join(', '))}`));
           
           const comparisons: any[] = [];
           
           for (const scenario of scenarios) {
-            for (let i = 0; i < models.length; i++) {
-              for (let j = i + 1; j < models.length; j++) {
-                const modelA = models[i];
-                const modelB = models[j];
+            for (let i = 0; i < availableModels.length; i++) {
+              for (let j = i + 1; j < availableModels.length; j++) {
+                const modelA = availableModels[i];
+                const modelB = availableModels[j];
                 
                 // Find videos by metadata first, fallback to filename patterns
                 let videoA = videosWithMetadata.find((v: any) => 
@@ -1069,8 +1730,20 @@ program
           }
           
           if (comparisons.length > 0) {
+            // Update experiment config with discovered models
+            await prisma.experiment.update({
+              where: { id: experiment.id },
+              data: {
+                config: {
+                  ...config,
+                  models: availableModels,
+                  scenarios
+                }
+              }
+            });
+            
             // Create comparisons
-            await prisma.comparison.createMany({
+            await prisma.twoVideoComparisonTask.createMany({
               data: comparisons.map(comp => ({
                 scenarioId: comp.scenarioId,
                 modelA: comp.modelA,
@@ -1092,7 +1765,7 @@ program
           console.log(chalk.blue('\n🎲 Random video assignment...\n'));
           
           // Get videos with metadata
-          const videoResponse = await fetch('http://localhost:3000/api/videos');
+          const videoResponse = await fetch(`${getBaseUrl()}/api/videos`);
           if (!videoResponse.ok) {
             throw new Error(`Failed to fetch video library: ${videoResponse.status}`);
           }
@@ -1206,8 +1879,8 @@ program
         
         console.log(chalk.gray('\nNext steps:'));
         console.log(chalk.gray(`1. Review study on Prolific dashboard`));
-        console.log(chalk.gray(`2. Publish study: experiment-cli prolific:publish --study ${prolificStudy.id}`));
-        console.log(chalk.gray(`3. Monitor progress: experiment-cli prolific:status --study ${prolificStudy.id}`));
+        console.log(chalk.gray(`2. Publish study: ./evalctl prolific:publish --study ${prolificStudy.id}`));
+        console.log(chalk.gray(`3. Monitor progress: ./evalctl prolific:status --study ${prolificStudy.id}`));
         
       } catch (error) {
         console.error(chalk.red('Error creating Prolific study:'), error);
@@ -1744,13 +2417,44 @@ program
   .description('Debug progress calculation for an experiment')
   .action(async (slug) => {
     try {
+      // First get experiment to check if it has Prolific integration
+      const baseExperiment = await prisma.experiment.findUnique({
+        where: { slug },
+        select: {
+          prolificStudyId: true
+        }
+      });
+      
+      if (!baseExperiment) {
+        console.log(chalk.red(`Experiment "${slug}" not found.`));
+        return;
+      }
+      
+      // Determine participant status filter based on Prolific integration
+      const participantStatusFilter = baseExperiment.prolificStudyId 
+        ? ['approved']  // For Prolific experiments, only count approved
+        : ['active', 'completed', 'approved'];  // For non-Prolific experiments, count all valid statuses
+      
       const experiment = await prisma.experiment.findUnique({
         where: { slug },
         include: {
           _count: {
             select: {
               twoVideoComparisonTasks: true,
-              participants: true,
+              participants: {
+                where: {
+                  AND: [
+                    {
+                      status: {
+                        in: participantStatusFilter
+                      }
+                    },
+                    {
+                      prolificId: { not: null }  // Only Prolific participants, exclude anonymous
+                    }
+                  ]
+                }
+              },
               twoVideoComparisonSubmissions: true
             }
           }
@@ -1773,21 +2477,21 @@ program
       console.log(chalk.gray(JSON.stringify(experiment.config, null, 2)));
       
       // Calculate progress the same way the frontend does
-      const evaluationsPerComparison = experiment.config?.evaluationsPerComparison || 5;
-      const targetEvaluations = experiment._count.twoVideoComparisonTasks * evaluationsPerComparison;
-      const progressPercentage = Math.min((experiment._count.twoVideoComparisonSubmissions / targetEvaluations) * 100, 100);
+      const evaluationsPerComparison = experiment.config?.evaluationsPerComparison;
+      const targetEvaluations = evaluationsPerComparison ? experiment._count.twoVideoComparisonTasks * evaluationsPerComparison : 0;
+      const progressPercentage = targetEvaluations > 0 ? Math.min((experiment._count.twoVideoComparisonSubmissions / targetEvaluations) * 100, 100) : 0;
       
       console.log(chalk.white('\nProgress Calculation:'));
       console.log(chalk.gray(`  evaluationsPerComparison from config: ${experiment.config?.evaluationsPerComparison}`));
-      console.log(chalk.gray(`  evaluationsPerComparison used: ${evaluationsPerComparison}`));
-      console.log(chalk.gray(`  targetEvaluations: ${experiment._count.twoVideoComparisonTasks} × ${evaluationsPerComparison} = ${targetEvaluations}`));
+      console.log(chalk.gray(`  evaluationsPerComparison used: ${evaluationsPerComparison || 'not set'}`));
+      console.log(chalk.gray(`  targetEvaluations: ${experiment._count.twoVideoComparisonTasks} × ${evaluationsPerComparison || 'not set'} = ${targetEvaluations}`));
       console.log(chalk.gray(`  actual evaluations: ${experiment._count.twoVideoComparisonSubmissions}`));
       console.log(chalk.yellow(`  progressPercentage: ${experiment._count.twoVideoComparisonSubmissions}/${targetEvaluations} = ${Math.round(progressPercentage)}%`));
       
       if (progressPercentage !== 100 && experiment._count.twoVideoComparisonSubmissions > 0) {
         console.log(chalk.red('\n⚠️  Progress is not 100%. Possible issues:'));
         if (!experiment.config?.evaluationsPerComparison) {
-          console.log(chalk.red('  - Missing evaluationsPerComparison in config (defaulting to 5)'));
+          console.log(chalk.red('  - Missing evaluationsPerComparison in config (target not set)'));
           
           // Auto-fix suggestion
           if (experiment._count.twoVideoComparisonTasks > 0) {
@@ -1804,6 +2508,189 @@ program
       
     } catch (error) {
       console.error(chalk.red('Error debugging experiment:'), error);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+// Debug participants command
+program
+  .command('debug:participants <slug>')
+  .description('Show detailed participant information for an experiment')
+  .action(async (slug) => {
+    try {
+      const experiment = await prisma.experiment.findUnique({
+        where: { slug },
+        include: {
+          participants: {
+            select: {
+              id: true,
+              prolificId: true,
+              prolificSubmissionId: true,
+              status: true,
+              startedAt: true,
+              completedAt: true,
+              metadata: true
+            }
+          }
+        }
+      });
+      
+      if (!experiment) {
+        console.log(chalk.red(`Experiment "${slug}" not found.`));
+        return;
+      }
+      
+      console.log(chalk.blue.bold('\n🔍 Participant Debug for "' + experiment.name + '"\n'));
+      
+      console.log(chalk.white(`Total participants: ${experiment.participants.length}\n`));
+      
+      experiment.participants.forEach((participant, index) => {
+        console.log(chalk.yellow(`Participant ${index + 1}:`));
+        console.log(chalk.gray(`  ID: ${participant.id}`));
+        console.log(chalk.gray(`  Prolific ID: ${participant.prolificId || 'null'}`));
+        console.log(chalk.gray(`  Submission ID: ${participant.prolificSubmissionId || 'null'}`));
+        console.log(chalk.gray(`  Status: ${participant.status}`));
+        console.log(chalk.gray(`  Started: ${participant.startedAt}`));
+        console.log(chalk.gray(`  Completed: ${participant.completedAt || 'null'}`));
+        
+        if (participant.metadata) {
+          const metadata = participant.metadata as any;
+          if (metadata.submissionStatus) {
+            console.log(chalk.gray(`  Prolific Status: ${metadata.submissionStatus}`));
+          }
+          if (metadata.demographics) {
+            console.log(chalk.gray(`  Demographics: ${JSON.stringify(metadata.demographics)}`));
+          }
+        }
+        console.log();
+      });
+      
+      // Count by status
+      const statusCounts = experiment.participants.reduce((acc, p) => {
+        acc[p.status] = (acc[p.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      console.log(chalk.white('Status breakdown:'));
+      Object.entries(statusCounts).forEach(([status, count]) => {
+        console.log(chalk.gray(`  ${status}: ${count}`));
+      });
+      
+      // Show filtered count (what the CLI would count)
+      const participantStatusFilter = experiment.prolificStudyId 
+        ? ['approved']  // For Prolific experiments, only count approved
+        : ['active', 'completed', 'approved'];  // For non-Prolific experiments, count all valid statuses
+        
+      const validParticipants = experiment.participants.filter(p => 
+        participantStatusFilter.includes(p.status) && p.prolificId
+      );
+      
+      console.log(chalk.cyan(`\nFiltered count (${participantStatusFilter.join('/')} with prolificId): ${validParticipants.length}`));
+      
+    } catch (error) {
+      console.error(chalk.red('Error debugging participants:'), error);
+    } finally {
+      await prisma.$disconnect();
+    }
+  });
+
+// Debug submissions command
+program
+  .command('debug:submissions <slug>')
+  .description('Show detailed submission information for an experiment')
+  .action(async (slug) => {
+    try {
+      const experiment = await prisma.experiment.findUnique({
+        where: { slug },
+        include: {
+          singleVideoEvaluationSubmissions: {
+            include: {
+              participant: {
+                select: {
+                  id: true,
+                  prolificId: true,
+                  status: true
+                }
+              },
+              singleVideoEvaluationTask: {
+                select: {
+                  id: true,
+                  scenarioId: true,
+                  modelName: true
+                }
+              }
+            }
+          },
+          singleVideoEvaluationTasks: {
+            select: {
+              id: true,
+              scenarioId: true,
+              modelName: true,
+              videoPath: true
+            }
+          }
+        }
+      });
+      
+      if (!experiment) {
+        console.log(chalk.red(`Experiment "${slug}" not found.`));
+        return;
+      }
+      
+      console.log(chalk.blue.bold('\n🔍 Submissions Debug for "' + experiment.name + '"\n'));
+      
+      console.log(chalk.white(`Tasks: ${experiment.singleVideoEvaluationTasks.length}`));
+      experiment.singleVideoEvaluationTasks.forEach((task, index) => {
+        console.log(chalk.gray(`  Task ${index + 1}: ${task.scenarioId} - ${task.modelName}`));
+      });
+      
+      console.log(chalk.white(`\nSubmissions: ${experiment.singleVideoEvaluationSubmissions.length}`));
+      
+      // Group submissions by participant
+      const submissionsByParticipant = experiment.singleVideoEvaluationSubmissions.reduce((acc, sub) => {
+        const participantId = sub.participant.id;
+        if (!acc[participantId]) {
+          acc[participantId] = {
+            participant: sub.participant,
+            submissions: []
+          };
+        }
+        acc[participantId].submissions.push(sub);
+        return acc;
+      }, {} as Record<string, { participant: any, submissions: any[] }>);
+      
+      Object.values(submissionsByParticipant).forEach(({ participant, submissions }) => {
+        console.log(chalk.yellow(`\nParticipant ${participant.prolificId || participant.id}:`));
+        console.log(chalk.gray(`  Status: ${participant.status}`));
+        console.log(chalk.gray(`  Submissions: ${submissions.length}`));
+        
+        submissions.forEach((sub, index) => {
+          console.log(chalk.gray(`    ${index + 1}. Task: ${sub.singleVideoEvaluationTask.scenarioId} - ${sub.singleVideoEvaluationTask.modelName}`));
+          console.log(chalk.gray(`       Status: ${sub.status}, Created: ${sub.createdAt}`));
+        });
+      });
+      
+      // Count valid submissions (from approved participants only for Prolific experiments)
+      const validParticipantIds = Object.values(submissionsByParticipant)
+        .filter(({ participant }) => {
+          if (experiment.prolificStudyId) {
+            return participant.status === 'approved' && participant.prolificId;
+          } else {
+            return ['active', 'completed', 'approved'].includes(participant.status);
+          }
+        })
+        .map(({ participant }) => participant.id);
+      
+      const validSubmissions = experiment.singleVideoEvaluationSubmissions.filter(sub => 
+        validParticipantIds.includes(sub.participantId)
+      );
+      
+      console.log(chalk.cyan(`\nValid submissions (from valid participants): ${validSubmissions.length}`));
+      console.log(chalk.cyan(`Expected submissions: ${experiment.singleVideoEvaluationTasks.length} tasks × ${validParticipantIds.length} participants = ${experiment.singleVideoEvaluationTasks.length * validParticipantIds.length}`));
+      
+    } catch (error) {
+      console.error(chalk.red('Error debugging submissions:'), error);
     } finally {
       await prisma.$disconnect();
     }
@@ -1992,6 +2879,181 @@ program
         
       } catch (error) {
         console.error(chalk.red('Error listing storage objects:'), error);
+      }
+    });
+  });
+
+program
+  .command('db:sql <query>')
+  .description('Execute a custom SQL query')
+  .option('-f, --format <format>', 'Output format (table|json)', 'table')
+  .action(async (query, options) => {
+    await requireAuth('execute SQL query', async () => {
+      try {
+        console.log(chalk.blue(`\n🔍 Executing: ${chalk.white(query)}\n`));
+        
+        const result = await prisma.$queryRawUnsafe(query);
+        
+        if (Array.isArray(result) && result.length > 0) {
+          if (options.format === 'json') {
+            console.log(JSON.stringify(result, null, 2));
+          } else {
+            // Table format
+            console.log(chalk.blue.bold('📋 Results:\n'));
+            console.table(result);
+          }
+          console.log(chalk.gray(`\n(${result.length} row${result.length === 1 ? '' : 's'})`));
+        } else if (Array.isArray(result) && result.length === 0) {
+          console.log(chalk.gray('No results returned'));
+        } else {
+          console.log(chalk.green('Query executed successfully'));
+          if (result) {
+            console.log(chalk.gray('Result:'), result);
+          }
+        }
+        
+      } catch (error) {
+        console.error(chalk.red('❌ Query failed:'), error);
+      }
+    });
+  });
+
+program
+  .command('whoami')
+  .description('Show current user information including Stack Auth User ID')
+  .action(async () => {
+    await requireAuth('show user info', async (auth) => {
+      console.log(chalk.blue.bold('\n👤 Current User Information\n'));
+      console.log(chalk.white('Email:'), chalk.cyan(auth.email || 'Unknown'));
+      console.log(chalk.white('Stack Auth User ID:'), chalk.yellow(auth.userId || auth.id));
+      console.log(chalk.white('Admin Status:'), auth.isAdmin ? chalk.green('Yes') : chalk.gray('No'));
+      
+      // Show organizations
+      try {
+        const userOrganizations = await getUserOrganizations(auth.userId || auth.id);
+        if (userOrganizations.length > 0) {
+          console.log(chalk.white('\nOrganizations:'));
+          userOrganizations.forEach((membership) => {
+            const org = membership.organization;
+            console.log(chalk.gray(`  • ${org.name} (${org.slug}) - ${membership.role}`));
+          });
+        } else {
+          console.log(chalk.gray('\nNo organizations found'));
+        }
+      } catch (error) {
+        console.log(chalk.red('\nError fetching organizations:'), error);
+      }
+    });
+  });
+
+program
+  .command('sync-stack-auth [organizationSlug]')
+  .description('Sync Stack Auth team members to organization database')
+  .action(async (organizationSlug) => {
+    await requireAuth('sync Stack Auth team members', async (auth) => {
+      try {
+        // Get organization to sync
+        let organizationId;
+        if (organizationSlug) {
+          const org = await prisma.organization.findUnique({
+            where: { slug: organizationSlug }
+          });
+          if (!org) {
+            console.log(chalk.red(`Organization "${organizationSlug}" not found.`));
+            return;
+          }
+          organizationId = org.id;
+        } else {
+          organizationId = await selectOrganization(auth);
+        }
+
+        console.log(chalk.blue(`\n🔄 Syncing Stack Auth team members...`));
+        console.log(chalk.gray(`🏢 Organization ID: ${organizationId}`));
+        
+        // Import and call the CLI-compatible sync function
+        const { syncStackAuthTeamToOrganization } = await import('./stack-auth-sync-cli');
+        
+        const result = await syncStackAuthTeamToOrganization(organizationId);
+        
+        if (!result.success) {
+          console.log(chalk.red(`❌ Sync failed: ${result.error}`));
+          return;
+        }
+        
+        console.log(chalk.green(`\n✅ Successfully synced Stack Auth team for: ${chalk.white(result.organization.name)}`));
+        console.log(chalk.gray(`   Stack Team ID: ${result.stackTeam.id}`));
+        console.log(chalk.gray(`   Total Stack Auth members: ${result.stackTeam.totalMembers}`));
+        console.log(chalk.gray(`   Existing database members: ${result.sync.existingMembers}`));
+        console.log(chalk.gray(`   New members added: ${result.sync.addedMembers}`));
+        
+        if (result.sync.newMembers.length > 0) {
+          console.log(chalk.blue('\n📋 New members added:'));
+          result.sync.newMembers.forEach((member: any) => {
+            console.log(chalk.white(`  • ${member.email} (${member.role})`));
+          });
+        } else {
+          console.log(chalk.gray('\n📋 All Stack Auth team members are already in the database'));
+        }
+
+      } catch (error) {
+        console.error(chalk.red('Error syncing Stack Auth teams:'), error);
+      }
+    });
+  });
+
+program
+  .command('add-member <stackUserId> [role]')
+  .description('Add a Stack Auth user to your organization by their User ID')
+  .action(async (stackUserId, role = 'ADMIN') => {
+    await requireAuth('add organization member', async (auth) => {
+      try {
+        const organizationId = await selectOrganization(auth);
+        
+        // Get organization details
+        const org = await prisma.organization.findUnique({
+          where: { id: organizationId }
+        });
+        
+        if (!org) {
+          console.log(chalk.red('Organization not found'));
+          return;
+        }
+
+        console.log(chalk.blue(`\n👥 Adding member to: ${chalk.white(org.name)}`));
+        console.log(chalk.gray(`   Stack User ID: ${stackUserId}`));
+        console.log(chalk.gray(`   Role: ${role}`));
+        
+        // Check if user is already a member
+        const existingMember = await prisma.organizationMember.findUnique({
+          where: {
+            organizationId_stackUserId: {
+              organizationId: organizationId,
+              stackUserId: stackUserId.trim()
+            }
+          }
+        });
+        
+        if (existingMember) {
+          console.log(chalk.yellow(`⚠️  User is already a member of this organization with role: ${existingMember.role}`));
+          return;
+        }
+
+        // Add the member
+        const member = await prisma.organizationMember.create({
+          data: {
+            organizationId: organizationId,
+            stackUserId: stackUserId.trim(),
+            role: role.toUpperCase() as any
+          }
+        });
+
+        console.log(chalk.green(`\n✅ Successfully added user to ${org.name}`));
+        console.log(chalk.gray(`   Member ID: ${member.id}`));
+        console.log(chalk.gray(`   Role: ${member.role}`));
+        console.log(chalk.gray(`   Stack User ID: ${member.stackUserId}`));
+
+      } catch (error) {
+        console.error(chalk.red('Error adding member:'), error);
       }
     });
   });

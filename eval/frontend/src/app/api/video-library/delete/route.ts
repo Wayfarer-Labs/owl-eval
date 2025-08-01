@@ -59,7 +59,7 @@ export async function DELETE(request: NextRequest) {
 
     // Delete from S3 first
     const s3Command = new DeleteObjectsCommand({
-      Bucket: process.env.TIGRIS_BUCKET_NAME,
+      Bucket: require('@/lib/storage').getBucketName(),
       Delete: {
         Objects: validKeys.map(key => ({ Key: key })),
         Quiet: false

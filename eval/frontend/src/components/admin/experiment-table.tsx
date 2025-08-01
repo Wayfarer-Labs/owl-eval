@@ -104,19 +104,16 @@ export function ExperimentTable({
 
 
   const getProgressPercentage = (exp: Experiment) => {
-    const totalTasks = exp._count.twoVideoComparisonTasks + exp._count.singleVideoEvaluationTasks
-    const totalSubmissions = exp._count.twoVideoComparisonSubmissions + exp._count.singleVideoEvaluationSubmissions
+    // For progress, show completed participants vs requested participants
+    const requestedParticipants = exp.config?.evaluationsPerComparison
+    const completedParticipants = exp._count.participants
     
-    if (totalTasks === 0) return 0
-    const evaluationsPerTask = exp.config?.evaluationsPerComparison || -1
-    const targetEvaluations = totalTasks * evaluationsPerTask
-    return Math.min((totalSubmissions / targetEvaluations) * 100, 100)
+    if (!requestedParticipants || requestedParticipants === 0) return 0
+    return Math.min((completedParticipants / requestedParticipants) * 100, 100)
   }
 
-  const getTargetEvaluations = (exp: Experiment) => {
-    const totalTasks = exp._count.twoVideoComparisonTasks + exp._count.singleVideoEvaluationTasks
-    const evaluationsPerTask = exp.config?.evaluationsPerComparison || -1
-    return totalTasks * evaluationsPerTask
+  const getTargetParticipants = (exp: Experiment) => {
+    return exp.config?.evaluationsPerComparison
   }
 
   const formatDate = (dateString: string) => {
@@ -595,13 +592,16 @@ export function ExperimentTable({
                       <div className="space-y-2 min-w-[120px]">
                         <div className="flex justify-between text-xs">
                           <span>
-                            {exp._count.twoVideoComparisonSubmissions + exp._count.singleVideoEvaluationSubmissions} submissions
+                            {exp._count.participants} participants
                           </span>
                           <span>{Math.round(getProgressPercentage(exp))}%</span>
                         </div>
                         <Progress value={getProgressPercentage(exp)} className="h-2" />
                         <div className="text-xs text-gray-500">
-                          {exp._count.twoVideoComparisonSubmissions + exp._count.singleVideoEvaluationSubmissions}/{getTargetEvaluations(exp)} target
+                          {getTargetParticipants(exp) ? 
+                            `${exp._count.participants}/${getTargetParticipants(exp)} requested` :
+                            `${exp._count.participants} participants (target not set)`
+                          }
                         </div>
                       </div>
                     </TableCell>

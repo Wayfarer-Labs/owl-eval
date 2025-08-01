@@ -33,7 +33,7 @@ export async function GET(
     const response = {
       video_task_id: videoTask.id,
       scenario_id: videoTask.scenarioId,
-      model_name: videoTask.modelName,
+      modelName: videoTask.modelName,
       video_path: videoTask.videoPath,
       scenario_metadata: scenarioMetadata,
       experiment: videoTask.experiment,

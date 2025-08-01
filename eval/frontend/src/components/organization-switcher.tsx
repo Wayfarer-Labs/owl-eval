@@ -95,16 +95,10 @@ export function OrganizationSwitcher() {
         {currentOrganization && (
           <DropdownMenuItem
             onClick={() => window.location.href = `/${currentOrganization.slug}/settings`}
-            className="flex items-center justify-between space-x-2 opacity-50 cursor-not-allowed"
-            disabled
+            className="flex items-center space-x-2"
           >
-            <div className="flex items-center space-x-2">
-              <Settings className="h-4 w-4" />
-              <span>Organization Settings</span>
-            </div>
-            <Badge variant="outline" className="text-xs bg-orange-100 text-orange-800 border-orange-200">
-              Coming Soon
-            </Badge>
+            <Settings className="h-4 w-4" />
+            <span>Organization Settings</span>
           </DropdownMenuItem>
         )}
         

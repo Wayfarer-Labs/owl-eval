@@ -29,6 +29,7 @@ import { EnhancedAnalyticsDashboard } from '@/components/admin/enhanced-analytic
 import { ProgressTracker } from '@/components/admin/progress-tracker'
 import { ProlificDialog } from '@/components/admin/prolific-dialog'
 import { DemographicsDashboard } from '@/components/admin/demographics-dashboard'
+import { ModelSelectionDialog } from '@/components/admin/model-selection-dialog'
 import { Breadcrumbs } from '@/components/navigation'
 
 interface EvaluationStats {
@@ -133,6 +134,16 @@ export default function AdminPage() {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
   const [selectedExperiment, setSelectedExperiment] = useState<string | null>(null)
   const [includeAnonymous, setIncludeAnonymous] = useState(false)
+  
+  // Model selection dialog state
+  const [showModelDialog, setShowModelDialog] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [uploading, setUploading] = useState(false)
+
+  // Get existing models from uploaded videos
+  const existingModels = Array.from(new Set(
+    uploadedVideos.filter(v => v.modelName).map(v => v.modelName!)
+  ))
 
   // Check if Stack Auth is configured (client-side check)
   const isStackAuthConfigured = typeof window !== 'undefined' && 
@@ -251,49 +262,26 @@ export default function AdminPage() {
   const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
     
-    for (const file of files) {
+    // Filter out non-video files and show errors
+    const validFiles = files.filter(file => {
       if (!file.type.startsWith('video/')) {
         toast({
           title: 'Invalid file type',
           description: `${file.name} is not a video file`,
           variant: 'destructive'
         })
-        continue
+        return false
       }
+      return true
+    })
 
-      try {
-        const formData = new FormData()
-        formData.append('video', file)
-        formData.append('libraryUpload', 'true')
-
-        const response = await fetch('/api/video-library/upload', {
-          method: 'POST',
-          body: formData
-        })
-
-        if (!response.ok) {
-          throw new Error('Upload failed')
-        }
-
-        const data = await response.json()
-        
-        setUploadedVideos(prev => [...prev, {
-          id: data.id || data.key,
-          url: data.videoUrl,
-          name: file.name,
-          uploadedAt: new Date(),
-          key: data.key,
-          size: file.size,
-          tags: [],
-          groups: []
-        }])
-
-        showUploadSuccess(file.name)
-      } catch (error) {
-        console.error('Upload error:', error)
-        showOperationError('Upload', file.name)
-      }
+    if (validFiles.length === 0) {
+      return
     }
+
+    // Show model selection dialog instead of uploading immediately
+    setPendingFiles(validFiles)
+    setShowModelDialog(true)
   }
 
   const handleVideoSelect = (videoKey: string) => {
@@ -408,6 +396,54 @@ export default function AdminPage() {
     } catch (error) {
       console.error('Update video error:', error)
       showOperationError('Update', 'video metadata')
+    }
+  }
+
+  const handleModelConfirm = async (modelName: string) => {
+    setUploading(true)
+    
+    try {
+      for (const file of pendingFiles) {
+        const formData = new FormData()
+        formData.append('video', file)
+        formData.append('libraryUpload', 'true')
+        formData.append('modelName', modelName)
+
+        const response = await fetch('/api/video-library/upload', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (!response.ok) {
+          throw new Error('Upload failed')
+        }
+
+        const data = await response.json()
+        
+        setUploadedVideos(prev => [...prev, {
+          id: data.id || data.key,
+          url: data.videoUrl,
+          name: file.name,
+          uploadedAt: new Date(),
+          key: data.key,
+          size: file.size,
+          tags: [],
+          groups: [],
+          modelName: modelName
+        }])
+
+        showUploadSuccess(file.name)
+      }
+      
+      // Close dialog and reset state
+      setShowModelDialog(false)
+      setPendingFiles([])
+      
+    } catch (error) {
+      console.error('Upload error:', error)
+      showOperationError('Upload', 'videos')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -630,6 +666,21 @@ export default function AdminPage() {
           onOpenChange={setProlificDialogOpen}
           experiment={selectedExperimentForProlific}
           onSuccess={fetchAllData}
+        />
+
+        {/* Model Selection Dialog */}
+        <ModelSelectionDialog
+          open={showModelDialog}
+          onOpenChange={(open) => {
+            setShowModelDialog(open)
+            if (!open) {
+              setPendingFiles([])
+            }
+          }}
+          files={pendingFiles}
+          existingModels={existingModels}
+          onConfirm={handleModelConfirm}
+          loading={uploading}
         />
       </div>
     </div>

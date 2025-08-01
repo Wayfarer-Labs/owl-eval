@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const file = formData.get('video') as File
+    const modelName = formData.get('modelName') as string | null
 
     if (!file) {
       return NextResponse.json(
@@ -63,10 +64,12 @@ export async function POST(request: NextRequest) {
         organizationId,
         tags: [],
         groups: [],
+        modelName: modelName || null,
         metadata: {
           originalName: file.name,
           mimeType: file.type,
-          uploadedBy: authResult.user?.id || 'dev-mode'
+          uploadedBy: authResult.user?.id || 'dev-mode',
+          modelName: modelName || null
         }
       }
     })

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getBucketName } from '@/lib/storage'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,7 @@ export async function GET(
       if (tigrisUrl.includes('t3.storage.dev') || tigrisUrl.includes('fly.storage.tigris.dev') || tigrisUrl.includes('.fly.storage.tigris.dev')) {
         // For URLs like https://gary-owl-eval-dev.fly.storage.tigris.dev/video-library/file.mp4
         // Extract everything after the domain
-        const bucketName = process.env.TIGRIS_BUCKET_NAME || 'gary-owl-eval-dev'
+        const bucketName = getBucketName();
         
         // Try different patterns to extract the path
         let path = ''

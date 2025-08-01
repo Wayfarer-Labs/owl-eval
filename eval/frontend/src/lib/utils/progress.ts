@@ -20,6 +20,12 @@ export function getProgressPercentage(experiment: ExperimentWithCounts): number 
   
   if (totalTasks === 0) return 0;
   const evaluationsPerTask = experiment.config?.evaluationsPerComparison || -1;
+  
+  // Handle -1 as "not set" - return 0% progress (no target defined)
+  if (evaluationsPerTask <= 0) {
+    return 0;
+  }
+  
   const targetEvaluations = totalTasks * evaluationsPerTask;
   return Math.min((totalSubmissions / targetEvaluations) * 100, 100);
 }
@@ -27,6 +33,12 @@ export function getProgressPercentage(experiment: ExperimentWithCounts): number 
 export function getTargetEvaluations(experiment: ExperimentWithCounts): number {
   const totalTasks = experiment._count.twoVideoComparisonTasks + experiment._count.singleVideoEvaluationTasks;
   const evaluationsPerTask = experiment.config?.evaluationsPerComparison || -1;
+  
+  // Handle -1 as "not set" - return 0 to avoid negative target evaluations
+  if (evaluationsPerTask <= 0) {
+    return 0;
+  }
+  
   return totalTasks * evaluationsPerTask;
 }
 

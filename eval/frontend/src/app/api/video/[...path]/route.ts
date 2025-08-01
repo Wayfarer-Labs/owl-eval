@@ -19,7 +19,8 @@ export async function GET(
   try {
     const { path } = await params
     const videoPath = path.join('/')
-    const bucketName = process.env.TIGRIS_BUCKET_NAME!
+    const { getBucketName } = require('@/lib/storage');
+    const bucketName = getBucketName();
     
     
     // Get object from Tigris

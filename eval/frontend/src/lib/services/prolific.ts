@@ -67,11 +67,44 @@ export function generateCompletionCode(): string {
 }
 
 export class ProlificService {
-  constructor(private apiToken?: string) {
-    // Get token from parameter or environment at runtime
+  constructor(private apiToken?: string, private organizationId?: string) {
+    // Get token from parameter, organization settings, or environment at runtime
     this.apiToken = apiToken || process.env.PROLIFIC_API_TOKEN;
+    this.organizationId = organizationId;
     if (!this.apiToken) {
       throw new Error('Prolific API token not configured');
+    }
+  }
+
+  static async createForOrganization(organizationId: string): Promise<ProlificService> {
+    try {
+      // Fetch organization settings to get Prolific API key
+      const organization = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { settings: true }
+      });
+
+      if (!organization) {
+        throw new Error(`Organization ${organizationId} not found`);
+      }
+
+      const settings = organization.settings as any || {};
+      const orgProlificKey = settings.prolificApiKey;
+
+      if (!orgProlificKey) {
+        // Fall back to global API key if organization doesn't have one configured
+        const globalKey = process.env.PROLIFIC_API_TOKEN;
+        if (!globalKey) {
+          throw new Error(`No Prolific API key configured for organization ${organizationId} and no global fallback available`);
+        }
+        console.warn(`Using global Prolific API key for organization ${organizationId} - consider configuring per-organization credentials`);
+        return new ProlificService(globalKey, organizationId);
+      }
+
+      return new ProlificService(orgProlificKey, organizationId);
+    } catch (error) {
+      console.error('Failed to create ProlificService for organization:', error);
+      throw error;
     }
   }
 
@@ -682,5 +715,10 @@ export const prolificService = {
       _prolificService = new ProlificService();
     }
     return _prolificService;
+  },
+
+  // New method for organization-specific instances
+  async forOrganization(organizationId: string): Promise<ProlificService> {
+    return ProlificService.createForOrganization(organizationId);
   }
 };

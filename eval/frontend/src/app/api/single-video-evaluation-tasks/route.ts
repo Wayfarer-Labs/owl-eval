@@ -80,7 +80,7 @@ export async function GET(request: Request) {
       video_task_id: videoTask.id,
       id: videoTask.id,
       scenario_id: videoTask.scenarioId,
-      model_name: videoTask.modelName,
+      modelName: videoTask.modelName,
       video_path: videoTask.videoPath,
       created_at: videoTask.createdAt.toISOString(),
       num_evaluations: videoTask._count.singleVideoEvaluationSubmissions,

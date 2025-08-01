@@ -893,10 +893,7 @@ export default function EvaluatePage() {
             title: 'Next Video',
             description: 'Loading the next video for evaluation...'
           })
-          // Preserve admin parameter if present
-          const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true'
-          const nextUrl = isAdmin ? `/evaluate/${submitResult.next_video_task_id}?admin=true` : `/evaluate/${submitResult.next_video_task_id}`
-          router.push(nextUrl)
+          router.push(`/evaluate/${submitResult.next_video_task_id}`)
         } else {
           // Check if this is a Prolific session
           const isProlific = sessionStorage.getItem('is_prolific')
@@ -954,10 +951,7 @@ export default function EvaluatePage() {
             title: 'Next Comparison',
             description: 'Loading the next comparison for evaluation...'
           })
-          // Preserve admin parameter if present
-          const isAdmin = new URLSearchParams(window.location.search).get('admin') === 'true'
-          const nextUrl = isAdmin ? `/evaluate/${submitResult.next_comparison_id}?admin=true` : `/evaluate/${submitResult.next_comparison_id}`
-          router.push(nextUrl)
+          router.push(`/evaluate/${submitResult.next_comparison_id}`)
         } else {
           // Check if this is a Prolific session
           const isProlific = sessionStorage.getItem('is_prolific')

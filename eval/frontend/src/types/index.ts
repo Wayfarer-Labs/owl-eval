@@ -20,7 +20,7 @@ export interface Comparison {
 export interface VideoTask {
   video_task_id: string
   scenario_id: string
-  model_name: string
+  modelName: string
   video_path: string
   scenario_metadata: {
     name: string

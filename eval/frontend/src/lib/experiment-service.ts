@@ -29,50 +29,129 @@ export class ExperimentService {
   ) {
     const { groupFilter, includeAnonymous = false } = options || {};
     
-    // Build participant filter based on includeAnonymous setting
-    const participantFilter = includeAnonymous ? {
-      status: {
-        not: 'returned'  // Always exclude returned participants
-      }
-    } : {
-      AND: [
-        {
-          id: {
-            not: {
-              startsWith: 'anon-session-'
-            }
-          }
-        },
-        {
-          status: {
-            not: 'returned'  // Always exclude returned participants
-          }
-        }
-      ]
-    };
-    
-    const experiments = await prisma.experiment.findMany({
+    // Fetch experiments with full participant data to compute correct counts
+    const experimentsRaw = await prisma.experiment.findMany({
       where: {
         organizationId,
         archived: false,
         ...(groupFilter && { group: groupFilter }),
       },
-      include: {
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        description: true,
+        status: true,
+        archived: true,
+        archivedAt: true,
+        group: true,
+        prolificStudyId: true,
+        evaluationMode: true,
+        config: true,
+        createdAt: true,
+        updatedAt: true,
+        startedAt: true,
+        completedAt: true,
+        organizationId: true,
         _count: {
           select: {
             twoVideoComparisonTasks: true,
             singleVideoEvaluationTasks: true,
-            participants: {
-              where: participantFilter
-            },
-            twoVideoComparisonSubmissions: true,
-            singleVideoEvaluationSubmissions: true,
-          },
+          }
         },
+        participants: {
+          select: {
+            id: true,
+            prolificId: true,
+            status: true
+          }
+        },
+        twoVideoComparisonSubmissions: {
+          where: {
+            status: 'completed'
+          },
+          select: {
+            participantId: true,
+            participant: {
+              select: {
+                id: true,
+                prolificId: true,
+                status: true
+              }
+            }
+          }
+        },
+        singleVideoEvaluationSubmissions: {
+          where: {
+            status: 'completed'
+          },
+          select: {
+            participantId: true,
+            participant: {
+              select: {
+                id: true,
+                prolificId: true,
+                status: true
+              }
+            }
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc',
       },
+    });
+
+    // Process experiments to compute correct counts based on experiment type
+    const experiments = experimentsRaw.map(exp => {
+      // Determine valid participant filter based on experiment type - match CLI logic exactly
+      const participantStatusFilter = exp.prolificStudyId 
+        ? ['approved']  // For Prolific experiments, only count approved
+        : ['active', 'completed', 'approved'];  // For non-Prolific experiments, count all valid statuses
+        
+      const validParticipants = exp.participants.filter(participant => {
+        // Must have a prolific ID and not be anonymous
+        if (!participant.prolificId || participant.prolificId.startsWith('anon-')) {
+          return false;
+        }
+        
+        // Must have valid status
+        if (!participantStatusFilter.includes(participant.status)) {
+          return false;
+        }
+        
+        // Additional anonymous check for includeAnonymous option
+        if (!includeAnonymous && participant.id.startsWith('anon-session-')) {
+          return false;
+        }
+        
+        return true;
+      });
+
+      const validParticipantIds = validParticipants.map(p => p.id);
+
+      // Count submissions from valid participants only
+      const validTwoVideoSubmissions = exp.twoVideoComparisonSubmissions.filter(sub =>
+        validParticipantIds.includes(sub.participantId)
+      );
+
+      const validSingleVideoSubmissions = exp.singleVideoEvaluationSubmissions.filter(sub =>
+        validParticipantIds.includes(sub.participantId)
+      );
+
+      return {
+        ...exp,
+        participants: undefined,  // Remove participants data from response
+        twoVideoComparisonSubmissions: undefined,  // Remove submissions data from response
+        singleVideoEvaluationSubmissions: undefined,  // Remove submissions data from response
+        _count: {
+          twoVideoComparisonTasks: exp._count.twoVideoComparisonTasks,
+          singleVideoEvaluationTasks: exp._count.singleVideoEvaluationTasks,
+          participants: validParticipants.length,
+          twoVideoComparisonSubmissions: validTwoVideoSubmissions.length,
+          singleVideoEvaluationSubmissions: validSingleVideoSubmissions.length,
+        }
+      };
     });
 
     return experiments;

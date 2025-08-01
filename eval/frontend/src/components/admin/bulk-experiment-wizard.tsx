@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -129,12 +129,19 @@ export function BulkExperimentWizard({
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Get unique models and scenarios from video library
+  // Auto-discover unique models and scenarios from video library
   const availableModels = Array.from(new Set(
     uploadedVideos
       .filter(v => v.modelName)
       .map(v => v.modelName!)
   ))
+  
+  // Auto-select all available models when they change
+  React.useEffect(() => {
+    if (availableModels.length > 0 && selectedModels.length === 0) {
+      setSelectedModels(availableModels)
+    }
+  }, [availableModels.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
   
   const availableScenarios = Array.from(new Set(
     uploadedVideos
@@ -476,11 +483,25 @@ export function BulkExperimentWizard({
               {/* Model Selection */}
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="font-semibold">Select Models</h3>
+                  <h3 className="font-semibold">Models (Auto-Discovered)</h3>
                   <Badge variant="outline">
                     {selectedModels.length} selected
                   </Badge>
                 </div>
+                {availableModels.length === 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">
+                      No videos with model names found. Upload videos with model names first.
+                    </p>
+                  </div>
+                )}
+                {availableModels.length > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-sm text-green-800">
+                      ✓ Auto-discovered {availableModels.length} models from uploaded videos. All models are pre-selected.
+                    </p>
+                  </div>
+                )}
 
                 {errors.models && (
                   <p className="text-sm text-red-500 flex items-center gap-1">
