@@ -1,210 +1,172 @@
-# OWL Evaluation Platform
+<div align="center">
 
-A comprehensive human evaluation platform for assessing generative video models through structured comparative analysis and crowdsourced evaluation studies.
+# 🦉 OWL Evaluation Framework
 
-## Overview
+**A comprehensive platform for evaluating and comparing world models through human evaluation studies**
 
-OWL Eval is a full-stack TypeScript platform designed to enable rigorous evaluation of video generation models through human judgment. The system provides end-to-end infrastructure for conducting comparative studies, from experiment design to statistical analysis, with particular focus on evaluating world models that simulate dynamic environments.
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?logo=typescript&logoColor=white)](https://typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
 
-The platform addresses the critical need for standardized human evaluation methodologies in generative AI research, providing researchers with tools to assess model outputs across multiple dimensions including visual quality, temporal consistency, controllability, and overall realism.
+[Features](#-features) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Contributing](#-contributing)
 
-## Architecture
+</div>
 
-**Multi-tenant Platform**: Built with organization-level isolation, role-based access control, and team collaboration features.
+---
 
-**Evaluation Modes**:
-- **Pairwise Comparison**: Side-by-side video evaluation with preference selection
-- **Single Video Rating**: Individual assessment across multiple quality dimensions
+## 🎯 Overview
 
-**Integration Points**:
-- **Prolific**: Automated participant recruitment and study management  
-- **Stack Auth**: Enterprise authentication with team management
-- **Cloud Storage**: Scalable video asset management (AWS S3/Tigris)
+OWL (Wayfarer Labs) Evaluation Framework is a modern, production-ready platform designed for researchers and organizations conducting human evaluation studies of generative world models. Built with TypeScript and Next.js, it provides a complete solution for comparing video outputs through structured A/B testing and multi-dimensional analysis.
 
-## Tech Stack
+### Why OWL?
 
-- **Frontend**: Next.js 15, React 19, TypeScript, Tailwind CSS
-- **Backend**: Next.js API routes, Prisma ORM
-- **Database**: PostgreSQL with full ACID compliance
-- **Authentication**: Stack Auth with multi-organization support
-- **CLI**: TypeScript-based command-line interface
-- **Deployment**: Docker containers with GitHub Actions CI/CD
+- 🔬 **Research-Grade Evaluations**: Structured evaluation across multiple dimensions (quality, controllability, visual fidelity, temporal consistency)
+- 🌐 **Scalable Human Studies**: Seamless integration with Prolific for large-scale crowd-sourced evaluations
+- 🏢 **Enterprise Ready**: Multi-tenant architecture with organization management and role-based access control
+- ⚡ **Developer Friendly**: Unified TypeScript CLI and comprehensive API for automation
+- 📊 **Real-time Analytics**: Built-in dashboard with progress tracking and performance visualization
 
-## Quick Start
+## ✨ Features
+
+### Core Capabilities
+- **🎬 Video Comparison Workflows** - Side-by-side video playback with synchronized controls
+- **📊 Multi-dimensional Evaluation** - Structured rating across research-validated dimensions
+- **👥 Human Study Management** - Complete participant workflow with screening and quality control
+- **🏗️ Multi-tenant Architecture** - Organization-based isolation with RBAC
+- **⚡ Real-time Analytics** - Live progress tracking and performance dashboards
+
+### Platform Integrations
+- **🔗 Prolific Integration** - Automated participant recruitment and payment processing
+- **☁️ Cloud Storage** - AWS S3 and Tigris integration for video asset management
+- **🔐 Authentication** - Stack Auth integration with social login support
+- **📡 REST API** - Complete API for programmatic access and automation
+
+### Developer Experience
+- **🛠️ Unified CLI** - `evalctl` command-line tool for experiment management
+- **🔄 Docker Support** - Containerized deployment with docker-compose
+- **🧪 Testing Suite** - Comprehensive test coverage with Jest
+- **📚 Type Safety** - Full TypeScript coverage across frontend and backend
+
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 18+ 
 - PostgreSQL database
-- AWS S3 or compatible storage
+- (Optional) AWS S3 or Tigris for video storage
 
 ### Installation
 
-1. **Clone and setup**:
+1. **Clone and install dependencies:**
    ```bash
-   git clone <repository>
+   git clone https://github.com/Wayfarer-Labs/owl-eval.git
    cd owl-eval/eval/frontend
    npm install
    ```
 
-2. **Configure environment**:
+2. **Set up your environment:**
    ```bash
-   cp .env.local.example .env.local
-   # Edit .env.local with your database and service credentials
+   cp .env.example .env.local
+   # Edit .env.local with your database and storage configuration
    ```
 
-3. **Initialize database**:
+3. **Initialize the database:**
    ```bash
-   npx prisma migrate dev
-   npx prisma generate
+   npm run db:migrate
    ```
 
-4. **Start development server**:
+4. **Start the development server:**
    ```bash
    npm run dev
    ```
 
-### CLI Usage
+5. **Use the CLI for experiment management:**
+   ```bash
+   cd ../
+   ./evalctl --help
+   ```
 
-The platform includes a unified CLI for experiment management:
+### Docker Deployment
 
-```bash
-cd eval
-./evalctl --help
-
-# Create organization and experiments
-./evalctl create-org "Research Lab"
-./evalctl create-experiment --name "Model Comparison Study"
-
-# Manage videos and tasks
-./evalctl upload-videos --path ./samples/
-./evalctl assign-tasks --experiment exp_123
-
-# Database operations
-./evalctl db:sql "SELECT * FROM experiments"
-./evalctl sync-stack-auth my-org
-```
-
-## Core Features
-
-### Experiment Management
-- **Multi-modal Studies**: Support for both comparison and absolute rating tasks
-- **Scenario Organization**: Logical grouping of evaluation tasks by context
-- **Progress Tracking**: Real-time monitoring of study completion rates
-- **Batch Operations**: Efficient handling of large-scale experiments
-
-### Human Evaluation Interface
-- **Synchronized Playback**: Frame-perfect video comparison
-- **Multi-dimensional Rating**: Structured assessment across quality dimensions
-- **Responsive Design**: Optimized for desktop and tablet evaluation sessions
-- **Progress Persistence**: Automatic saving of partial responses
-
-### Analytics Dashboard
-- **Performance Metrics**: Model comparison with statistical significance testing
-- **Participation Analytics**: Study completion rates and participant engagement
-- **Data Export**: CSV/JSON export for external analysis
-- **Visualization**: Interactive charts and performance summaries
-
-### Prolific Integration
-- **Automated Study Creation**: API-driven study setup and participant recruitment
-- **Dynamic Completion Codes**: Secure participant verification
-- **Quality Control**: Built-in screening and attention checks
-- **Bonus Management**: Automated performance-based payments
-
-## Project Structure
-
-```
-owl-eval/
-├── eval/
-│   ├── frontend/           # Next.js web application
-│   │   ├── src/app/       # Pages and API routes
-│   │   ├── components/    # React components
-│   │   ├── lib/          # Business logic
-│   │   └── prisma/       # Database schema
-│   ├── scripts/          # CLI implementation
-│   └── evalctl          # Main CLI executable
-├── docs/                 # Documentation
-└── README.md            # This file
-```
-
-## Development Workflow
-
-### Local Development
-```bash
-# Start development environment
-npm run dev
-
-# Run tests
-npm test
-
-# Type checking
-npm run type-check
-
-# Database migrations
-npx prisma migrate dev
-```
-
-### Contributing
-1. Create feature branch from `main`
-2. Implement changes with tests
-3. Run quality checks: `npm run lint && npm run type-check`
-4. Submit pull request with detailed description
-
-### Deployment
-The application supports both Docker containerization and serverless deployment:
+For production deployment:
 
 ```bash
-# Docker deployment
-docker-compose up
-
-# Production build
-npm run build
-npm start
+docker-compose up -d
 ```
 
-## Documentation
+Visit `http://localhost:3000` to access the web interface.
 
-- **[System Architecture](docs/evaluation-system.md)**: Technical architecture and design patterns
-- **[Multi-tenancy](docs/multitenant.md)**: Organization management and access control
-- **[CLI Reference](docs/cli-scripts.md)**: Complete command-line interface documentation
-- **[Prolific Integration](docs/prolific-integration.md)**: Crowdsourcing configuration and best practices
-- **[Development Guide](docs/frontend-development.md)**: Setup instructions and coding standards
+## 🏗️ Architecture
 
-## Research Applications
+### Tech Stack
+- **Frontend:** Next.js 15, React 19, TypeScript, Tailwind CSS
+- **Backend:** Next.js API routes, Prisma ORM  
+- **Database:** PostgreSQL
+- **Authentication:** Stack Auth
+- **Storage:** AWS S3 / Tigris
+- **CLI:** TypeScript with Commander.js
 
-This platform has been designed to support research in:
-- **World Model Evaluation**: Assessment of environment simulation fidelity
-- **Video Generation Quality**: Comparative analysis of diffusion models
-- **Human-AI Interaction**: Understanding preferences in AI-generated content
-- **Perceptual Studies**: Investigation of human visual perception and judgment
-
-## API Reference
-
-Core API endpoints for programmatic access:
-
+### Project Structure
 ```
-GET    /api/experiments           # List experiments
-POST   /api/experiments           # Create experiment
-GET    /api/experiments/[id]      # Get experiment details
-POST   /api/submit-evaluation     # Submit evaluation response
-GET    /api/model-performance     # Get performance analytics
+eval/
+├── frontend/           # Next.js web application
+│   ├── src/app/       # Pages and API routes  
+│   ├── src/components/ # Reusable UI components
+│   └── src/lib/       # Core business logic
+├── scripts/           # TypeScript CLI tools
+├── evalctl           # Main CLI executable
+└── docker-compose.yml # Development environment
+
+docs/                  # Comprehensive documentation
+├── concepts.md        # Core concepts and methodology
+├── evaluation-system.md # System architecture
+├── prolific-integration.md # Platform integrations
+└── contributing.md    # Development guidelines
 ```
 
-Complete API documentation available in the codebase.
+## 📚 Documentation
 
-## Security & Privacy
+### Getting Started
+- [**Core Concepts**](docs/concepts.md) - Understanding the evaluation methodology and data model
+- [**System Architecture**](docs/evaluation-system.md) - Deep dive into platform architecture and workflows
+- [**CLI Reference**](docs/cli-scripts.md) - Complete command-line tool documentation
 
-- **Data Isolation**: Strict multi-tenant data separation
-- **Authentication**: Enterprise-grade auth with Stack Auth
-- **GDPR Compliance**: Participant data handling and deletion
-- **API Security**: Rate limiting and input validation
+### Development  
+- [**Frontend Development**](docs/frontend-development.md) - Setup and development guidelines
+- [**Contributing Guide**](docs/contributing.md) - How to contribute to the project
+- [**Testing Guide**](docs/testing.md) - Running and writing tests
 
-## Support & Community
+### Integrations
+- [**Prolific Integration**](docs/prolific-integration.md) - Setting up human evaluation studies
+- [**Multi-tenant Setup**](docs/multitenant.md) - Organization and user management
 
-For questions, bug reports, or feature requests:
-- Check existing [documentation](docs/) 
-- Review [GitHub Issues](../../issues)
-- Follow [contributing guidelines](docs/contributing.md)
+## 🤝 Contributing
 
-## License
+We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
 
-MIT License - see LICENSE file for details.
+### How to Contribute
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes and add tests
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+See our [Contributing Guide](docs/contributing.md) for detailed development setup and guidelines.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙋‍♀️ Support
+
+- 📖 **Documentation**: Check the [`docs/`](docs/) directory for comprehensive guides
+- 🐛 **Issues**: Report bugs and request features via [GitHub Issues](https://github.com/Wayfarer-Labs/owl-eval/issues)
+- 💬 **Discussions**: Join community discussions in [GitHub Discussions](https://github.com/Wayfarer-Labs/owl-eval/discussions)
+
+---
+
+<div align="center">
+
+**Built with ❤️ by [Wayfarer Labs](https://github.com/Wayfarer-Labs)**
+
+</div>
