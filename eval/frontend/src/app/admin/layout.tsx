@@ -35,21 +35,5 @@ export default async function AdminLayout({
 
   const isAdmin = user.serverMetadata?.isAdmin === true;
 
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-        <p className="text-gray-600">You don&apos;t have admin permissions to access this page.</p>
-        <div className="text-sm text-gray-500 space-y-1">
-          <p>User ID: {user.id}</p>
-          <p>Email: {user.primaryEmail}</p>
-        </div>
-        <Link href="/handler/sign-out" className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
-          Sign Out
-        </Link>
-      </div>
-    );
-  }
-
   return <>{children}</>;
 }
