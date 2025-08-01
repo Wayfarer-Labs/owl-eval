@@ -647,7 +647,8 @@ export default function AdminPage() {
             name: v.name,
             uploadedAt: v.uploadedAt,
             key: v.key,
-            size: v.size
+            size: v.size,
+            modelName: v.modelName
           }))}
           onRefresh={fetchAllData}
         />
