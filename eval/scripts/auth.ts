@@ -221,13 +221,6 @@ export async function requireAuth<T>(
   
   console.log(chalk.green(`\n✓ Authenticated as: ${auth.email}`));
   
-  // Check admin permissions if required
-  if (requireAdmin && !auth.isAdmin) {
-    console.log(chalk.red(`\n❌ Admin permissions required to ${operation}`));
-    console.log(chalk.gray(`Current user (${auth.email}) does not have admin permissions.`));
-    return null;
-  }
-  
   // Run the operation with authentication
   return callback(auth);
 }
