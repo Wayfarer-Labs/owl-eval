@@ -1,5 +1,5 @@
 // Import centralized configuration
-// import { getConfig as getCentralizedConfig } from '../../../../config'
+import { getConfig as getCentralizedConfig } from '../../../../config'
 
 interface EvaluationConfig {
   outputDir: string
@@ -20,13 +20,11 @@ interface EvaluationConfig {
 }
 
 export function getConfig(): EvaluationConfig {
-  // const centralConfig = getCentralizedConfig()
+  const centralConfig = getCentralizedConfig()
   
   return {
-    // outputDir: centralConfig.storage.dataDir,
-    // targetEvaluationsPerComparison: centralConfig.evaluation.targetEvaluationsPerComparison,
-    outputDir: './data',
-    targetEvaluationsPerComparison: -1,
+    outputDir: centralConfig.storage.dataDir,
+    targetEvaluationsPerComparison: centralConfig.evaluation.targetEvaluationsPerComparison,
     scenarios: ['beach', 'desert', 'forest', 'hills', 'icy', 'mushroom', 'plains', 'river'],
     dimensions: [
       {
@@ -55,9 +53,7 @@ export function getConfig(): EvaluationConfig {
       duration: 65,
       resolution: [1280, 720]
     },
-    // maxVideoSizeMB: centralConfig.evaluation.maxVideoSizeMB,
-    // supportedVideoFormats: centralConfig.evaluation.supportedVideoFormats
-    maxVideoSizeMB: 100,
-    supportedVideoFormats: ['mp4', 'webm', 'mov']
+    maxVideoSizeMB: centralConfig.evaluation.maxVideoSizeMB,
+    supportedVideoFormats: centralConfig.evaluation.supportedVideoFormats
   }
 }
