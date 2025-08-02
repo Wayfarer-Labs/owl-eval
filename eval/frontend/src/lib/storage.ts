@@ -64,8 +64,10 @@ export function getVideoKey(experimentId: string, comparisonId: string, modelLab
 
 // Generate proxy URL that goes through our API route instead of direct Tigris access
 export function getProxyVideoUrl(key: string): string {
-  // In production, this should use the actual app URL
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!baseUrl) {
+    throw new Error('NEXT_PUBLIC_APP_URL environment variable is required');
+  }
   return `${baseUrl}/api/video/${key}`;
 }
 

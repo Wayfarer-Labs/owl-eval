@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth-middleware';
+import { requireAuth } from '@/lib/auth-middleware';
 import { prisma } from '@/lib/prisma';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
@@ -107,8 +107,8 @@ async function fetchExperimentsWithRetry(retryCount = 0): Promise<any[]> {
 
 export async function GET(request: NextRequest) {
   try {
-    // Check admin authentication
-    const authResult = await requireAdmin(request);
+    // Check authentication
+    const authResult = await requireAuth(request);
     if (authResult instanceof NextResponse) {
       return authResult;
     }
@@ -245,8 +245,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Check admin authentication
-  const authResult = await requireAdmin(request);
+  // Check authentication
+  const authResult = await requireAuth(request);
   if (authResult instanceof NextResponse) {
     return authResult;
   }

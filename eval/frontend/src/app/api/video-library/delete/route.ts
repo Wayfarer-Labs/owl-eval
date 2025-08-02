@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth-middleware'
+import { requireAuth } from '@/lib/auth-middleware'
 import { prisma } from '@/lib/prisma'
 import { S3Client, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 
@@ -15,8 +15,8 @@ const s3Client = new S3Client({
 })
 
 export async function DELETE(request: NextRequest) {
-  // Check admin authentication
-  const authResult = await requireAdmin(request);
+  // Check authentication
+  const authResult = await requireAuth(request);
   if (authResult instanceof NextResponse) {
     return authResult;
   }
