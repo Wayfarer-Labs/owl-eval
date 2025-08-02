@@ -66,22 +66,48 @@ export function getVideoKey(experimentId: string, comparisonId: string, modelLab
 export function getProxyVideoUrl(key: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!baseUrl) {
-    throw new Error('NEXT_PUBLIC_APP_URL environment variable is required');
+    // Fallback: try to detect from window.location in browser
+    if (typeof window !== 'undefined') {
+      const protocol = window.location.protocol;
+      const host = window.location.host;
+      return `${protocol}//${host}/api/video/${key}`;
+    } else {
+      // Server-side: NEXT_PUBLIC_APP_URL must be set properly in production
+      throw new Error('NEXT_PUBLIC_APP_URL environment variable is required for server-side video URL generation');
+    }
   }
   return `${baseUrl}/api/video/${key}`;
 }
 
-// Convert direct Tigris URLs to proxy URLs (for existing data migration)
-export function convertToProxyUrl(directUrl: string): string {
-  // Extract key from direct Tigris URL
-  const tigrisPattern = /https:\/\/[^.]+\.fly\.storage\.tigris\.dev\/(.+)/;
-  const match = directUrl.match(tigrisPattern);
+// Convert any video URL to use the correct current domain
+export function normalizeVideoUrl(url: string): string {
+  // Extract key from various URL formats
+  let key: string | null = null;
   
-  if (match) {
-    const key = match[1];
+  // From direct Tigris URL
+  const tigrisPattern = /https:\/\/[^.]+\.fly\.storage\.tigris\.dev\/(.+)/;
+  const tigrisMatch = url.match(tigrisPattern);
+  if (tigrisMatch) {
+    key = tigrisMatch[1];
+  }
+  
+  // From proxy URL with any domain
+  const proxyPattern = /https?:\/\/[^/]+\/api\/video\/(.+)/;
+  const proxyMatch = url.match(proxyPattern);
+  if (proxyMatch) {
+    key = proxyMatch[1];
+  }
+  
+  // If we extracted a key, generate new URL with current domain
+  if (key) {
     return getProxyVideoUrl(key);
   }
   
-  // If it's already a proxy URL or unrecognized format, return as-is
-  return directUrl;
+  // If no pattern matched, return as-is
+  return url;
+}
+
+// Legacy function for backward compatibility
+export function convertToProxyUrl(directUrl: string): string {
+  return normalizeVideoUrl(directUrl);
 }
