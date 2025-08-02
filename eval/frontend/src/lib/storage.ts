@@ -9,8 +9,8 @@ export function getTigrisClient(): S3Client {
   if (!tigrisClient) {
     
     tigrisClient = new S3Client({
-      endpoint: process.env.AWS_ENDPOINT_URL_S3 || 'https://fly.storage.tigris.dev',
-      region: process.env.AWS_REGION || 'auto',
+      endpoint: process.env.AWS_ENDPOINT_URL_S3,
+      region: process.env.AWS_REGION,
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
