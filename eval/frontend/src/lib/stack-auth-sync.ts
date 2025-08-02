@@ -86,11 +86,15 @@ export async function syncStackAuthTeamToOrganization(organizationId: string): P
     // Add new members
     for (const teamUser of teamUsers) {
       if (!currentUserIds.has(teamUser.id)) {
+        if (!teamUser.primaryEmail) {
+          throw new Error(`Stack Auth user ${teamUser.id} has no primary email - cannot sync to organization`);
+        }
+        
         // Determine role based on Stack Auth permissions
         // TODO: Improve role detection once we understand Stack Auth SDK better
         const role = 'ADMIN'
         
-        console.log(`➕ Adding new member: ${teamUser.primaryEmail || teamUser.id} as ${role}`)
+        console.log(`➕ Adding new member: ${teamUser.primaryEmail} as ${role}`)
         
         const member = await prisma.organizationMember.create({
           data: {
@@ -102,12 +106,16 @@ export async function syncStackAuthTeamToOrganization(organizationId: string): P
         
         addedMembers.push({
           id: member.id,
-          email: teamUser.primaryEmail || 'unknown',
+          email: teamUser.primaryEmail,
           role: role,
           stackUserId: teamUser.id
         })
       } else {
-        console.log(`➖ User already exists: ${teamUser.primaryEmail || teamUser.id}`)
+        if (!teamUser.primaryEmail) {
+          console.log(`➖ User already exists: ${teamUser.id} (no email available)`)
+        } else {
+          console.log(`➖ User already exists: ${teamUser.primaryEmail}`)
+        }
       }
     }
 
