@@ -45,6 +45,7 @@ interface CreateExperimentWizardProps {
     uploadedAt: Date
     key: string
     size: number
+    modelName?: string
   }>
   onRefresh?: () => void
 }
@@ -200,12 +201,34 @@ export function CreateExperimentWizard({
     }))
   }
 
+  const findVideoByUrl = (url: string) => {
+    return uploadedVideos.find(video => video.url === url)
+  }
+
   const updateComparison = (id: string, field: keyof Comparison, value: string) => {
     setExperiment(prev => ({
       ...prev,
-      comparisons: prev.comparisons.map(comp => 
-        comp.id === id ? { ...comp, [field]: value } : comp
-      )
+      comparisons: prev.comparisons.map(comp => {
+        if (comp.id === id) {
+          const updatedComp = { ...comp, [field]: value }
+          
+          // Auto-populate model name when video is selected
+          if (field === 'videoAUrl' && value) {
+            const video = findVideoByUrl(value)
+            if (video?.modelName) {
+              updatedComp.modelA = video.modelName
+            }
+          } else if (field === 'videoBUrl' && value) {
+            const video = findVideoByUrl(value)
+            if (video?.modelName) {
+              updatedComp.modelB = video.modelName
+            }
+          }
+          
+          return updatedComp
+        }
+        return comp
+      })
     }))
   }
 
