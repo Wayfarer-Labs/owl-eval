@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { useToast } from '@/components/ui/use-toast'
 import ReactPlayer from 'react-player'
+import { normalizeVideoUrl } from '@/lib/storage'
 
 interface Comparison {
   comparison_id: string
@@ -1318,7 +1319,9 @@ export default function EvaluatePage() {
                   <div className="relative pt-[56.25%]">
                     <ReactPlayer
                       ref={playerARef}
-                      url={comparison?.model_a_video_path}
+                      url={comparison?.model_a_video_path ? 
+                        normalizeVideoUrl(comparison.model_a_video_path) : 
+                        undefined}
                       width="100%"
                       height="100%"
                       loop
@@ -1452,7 +1455,9 @@ export default function EvaluatePage() {
                   <div className="relative pt-[56.25%]">
                     <ReactPlayer
                       ref={playerBRef}
-                      url={comparison?.model_b_video_path}
+                      url={comparison?.model_b_video_path ? 
+                        normalizeVideoUrl(comparison.model_b_video_path) : 
+                        undefined}
                       width="100%"
                       height="100%"
                       loop
@@ -1570,7 +1575,9 @@ export default function EvaluatePage() {
                 <div className="relative pt-[56.25%]">
                   <ReactPlayer
                     ref={playerARef}
-                    url={videoTask?.videoPath}
+                    url={videoTask?.videoPath ? 
+                      normalizeVideoUrl(videoTask.videoPath) : 
+                      undefined}
                     width="100%"
                     height="100%"
                     loop
