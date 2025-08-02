@@ -5,7 +5,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 // Lazy initialization of Tigris client to ensure environment variables are loaded
 let tigrisClient: S3Client | null = null;
 
-function getTigrisClient(): S3Client {
+export function getTigrisClient(): S3Client {
   if (!tigrisClient) {
     
     tigrisClient = new S3Client({
@@ -44,9 +44,8 @@ export async function uploadVideoToTigris(
 
   await getTigrisClient().send(command);
 
-  // Return public URL - make sure to use the correct format for Tigris
-  const endpoint = `https://${bucketName}.fly.storage.tigris.dev`
-  return `${endpoint}/${key}`;
+  // Return proxy URL instead of direct Tigris URL for security
+  return getProxyVideoUrl(key);
 }
 
 export async function getSignedVideoUrl(key: string, expiresIn = 3600): Promise<string> {
@@ -61,4 +60,26 @@ export async function getSignedVideoUrl(key: string, expiresIn = 3600): Promise<
 // Helper to organize videos by experiment
 export function getVideoKey(experimentId: string, comparisonId: string, modelLabel: string): string {
   return `experiments/${experimentId}/comparisons/${comparisonId}/${modelLabel}.mp4`
+}
+
+// Generate proxy URL that goes through our API route instead of direct Tigris access
+export function getProxyVideoUrl(key: string): string {
+  // In production, this should use the actual app URL
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  return `${baseUrl}/api/video/${key}`;
+}
+
+// Convert direct Tigris URLs to proxy URLs (for existing data migration)
+export function convertToProxyUrl(directUrl: string): string {
+  // Extract key from direct Tigris URL
+  const tigrisPattern = /https:\/\/[^.]+\.fly\.storage\.tigris\.dev\/(.+)/;
+  const match = directUrl.match(tigrisPattern);
+  
+  if (match) {
+    const key = match[1];
+    return getProxyVideoUrl(key);
+  }
+  
+  // If it's already a proxy URL or unrecognized format, return as-is
+  return directUrl;
 }

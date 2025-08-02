@@ -707,7 +707,7 @@ export function VideoLibraryManager({
                           }, { once: true });
                         }
                       }}
-                      src={video.url}
+                      src={`/api/video/${video.key}`}
                       className="w-full h-full object-cover"
                       preload="metadata"
                       crossOrigin="anonymous"
@@ -821,7 +821,7 @@ export function VideoLibraryManager({
                             }, { once: true });
                           }
                         }}
-                        src={video.url}
+                        src={`/api/video/${video.key}`}
                         className="w-24 h-16 object-cover rounded"
                         preload="metadata"
                         crossOrigin="anonymous"
