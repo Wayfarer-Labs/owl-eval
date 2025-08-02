@@ -66,15 +66,14 @@ export function getVideoKey(experimentId: string, comparisonId: string, modelLab
 export function getProxyVideoUrl(key: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (!baseUrl) {
-    // Fallback: try to detect from window.location in browser, or use localhost for server
+    // Fallback: try to detect from window.location in browser
     if (typeof window !== 'undefined') {
       const protocol = window.location.protocol;
       const host = window.location.host;
       return `${protocol}//${host}/api/video/${key}`;
     } else {
-      // Server-side fallback - this should be set properly in production
-      console.warn('NEXT_PUBLIC_APP_URL not set, using localhost fallback');
-      return `http://localhost:3000/api/video/${key}`;
+      // Server-side: NEXT_PUBLIC_APP_URL must be set properly in production
+      throw new Error('NEXT_PUBLIC_APP_URL environment variable is required for server-side video URL generation');
     }
   }
   return `${baseUrl}/api/video/${key}`;
