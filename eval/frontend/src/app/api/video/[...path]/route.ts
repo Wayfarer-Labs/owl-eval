@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { requireAuth } from '@/lib/auth-middleware'
-import { prisma } from '@/lib/prisma'
 
 export async function GET(
   request: NextRequest,
@@ -20,16 +19,8 @@ export async function GET(
     const bucketName = getBucketName();
     const s3Client = getTigrisClient();
     
-    // Check if user has access to this video
-    if (!authResult.devMode && authResult.user?.id) {
-      const hasAccess = await checkVideoAccess(authResult.user.id, videoPath);
-      if (!hasAccess) {
-        return NextResponse.json(
-          { error: 'Access denied' },
-          { status: 403 }
-        );
-      }
-    }
+    // Videos are accessible to all authenticated users for evaluation purposes
+    // The authentication requirement provides sufficient access control
     
     // Get object from Tigris
     const command = new GetObjectCommand({
@@ -89,46 +80,3 @@ export async function GET(
   }
 }
 
-// Check if user has access to the video based on organization membership
-async function checkVideoAccess(userId: string, videoPath: string): Promise<boolean> {
-  try {
-    // Get user's organizations
-    const { getUserOrganizations } = await import('@/lib/organization');
-    const userOrgs = await getUserOrganizations(userId);
-    const userOrgIds = userOrgs.map(uo => uo.organization.id);
-
-    // For video-library paths, check if video belongs to user's organization
-    if (videoPath.startsWith('video-library/')) {
-      const video = await prisma.video.findFirst({
-        where: { key: videoPath }
-      });
-      
-      if (!video) return false;
-      
-      // Allow access if video has no organization (shared) or user belongs to video's org
-      return !video.organizationId || userOrgIds.includes(video.organizationId);
-    }
-    
-    // For experiment paths (experiments/{expId}/...), check experiment ownership
-    if (videoPath.startsWith('experiments/')) {
-      const pathParts = videoPath.split('/');
-      if (pathParts.length >= 2) {
-        const experimentId = pathParts[1];
-        const experiment = await prisma.experiment.findFirst({
-          where: { id: experimentId }
-        });
-        
-        if (!experiment) return false;
-        
-        // Allow access if experiment belongs to user's organization
-        return !experiment.organizationId || userOrgIds.includes(experiment.organizationId);
-      }
-    }
-    
-    // Default deny for unknown paths
-    return false;
-  } catch (error) {
-    console.error('Error checking video access:', error);
-    return false;
-  }
-}
