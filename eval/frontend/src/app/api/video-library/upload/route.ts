@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { uploadVideoToTigris } from '@/lib/storage'
-import { requireAdmin } from '@/lib/auth-middleware'
+import { requireAuth } from '@/lib/auth-middleware'
 import { nanoid } from 'nanoid'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
-  // Check admin authentication
-  const authResult = await requireAdmin(request);
+  // Check authentication
+  const authResult = await requireAuth(request);
   if (authResult instanceof NextResponse) {
     return authResult;
   }
