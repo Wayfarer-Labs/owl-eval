@@ -60,11 +60,15 @@ export async function POST(request: NextRequest) {
       data: { [updateField]: videoUrl }
     })
 
+    if (!authResult.user?.id) {
+      throw new Error('User ID is required but not found in auth result');
+    }
+
     return NextResponse.json({ 
       success: true, 
       videoUrl,
       key,
-      uploadedBy: authResult.user?.id || 'dev-mode'
+      uploadedBy: authResult.user.id
     })
   } catch (error) {
     console.error('Error uploading video:', error)

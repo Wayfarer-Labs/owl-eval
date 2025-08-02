@@ -68,11 +68,15 @@ export async function POST(request: NextRequest) {
         metadata: {
           originalName: file.name,
           mimeType: file.type,
-          uploadedBy: authResult.user?.id || 'dev-mode',
+          uploadedBy: authResult.user?.id,
           modelName: modelName || null
         }
       }
     })
+
+    if (!authResult.user?.id) {
+      throw new Error('User ID is required but not found in auth result');
+    }
 
     return NextResponse.json({ 
       success: true, 
@@ -80,7 +84,7 @@ export async function POST(request: NextRequest) {
       videoUrl,
       key,
       name: file.name,
-      uploadedBy: authResult.user?.id || 'dev-mode'
+      uploadedBy: authResult.user.id
     })
   } catch (error) {
     console.error('Error uploading video to library:', error)

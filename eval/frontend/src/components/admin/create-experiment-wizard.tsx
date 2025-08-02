@@ -53,8 +53,8 @@ interface CreateExperimentWizardProps {
 interface Comparison {
   id: string
   scenarioId: string
-  modelA: string
-  modelB: string
+  modelA?: string
+  modelB?: string
   videoAUrl: string
   videoBUrl: string
   metadata: any
@@ -150,18 +150,12 @@ export function CreateExperimentWizard({
           if (!comp.scenarioId) {
             newErrors[`comp-${index}-scenario`] = 'Scenario is required'
           }
-          if (!comp.modelA) {
-            newErrors[`comp-${index}-modelA`] = 'Model is required'
-          }
           if (!comp.videoAUrl) {
             newErrors[`comp-${index}-videoA`] = 'Video is required'
           }
           
           // Only validate Model B and Video B for comparison mode
           if (experiment.evaluationMode === 'comparison') {
-            if (!comp.modelB) {
-              newErrors[`comp-${index}-modelB`] = 'Model B is required'
-            }
             if (!comp.videoBUrl) {
               newErrors[`comp-${index}-videoB`] = 'Video B is required'
             }
@@ -189,8 +183,8 @@ export function CreateExperimentWizard({
     const newComparison: Comparison = {
       id: `comp-${Date.now()}`,
       scenarioId: '',
-      modelA: '',
-      modelB: '',
+      modelA: undefined,
+      modelB: undefined,
       videoAUrl: '',
       videoBUrl: '',
       metadata: {}
@@ -306,9 +300,9 @@ export function CreateExperimentWizard({
       case 1:
         return experiment.comparisons.length > 0 && 
                experiment.comparisons.every(comp => {
-                 const baseFields = comp.scenarioId && comp.modelA && comp.videoAUrl
+                 const baseFields = comp.scenarioId && comp.videoAUrl
                  if (experiment.evaluationMode === 'comparison') {
-                   return baseFields && comp.modelB && comp.videoBUrl
+                   return baseFields && comp.videoBUrl
                  } else {
                    return baseFields
                  }
@@ -508,35 +502,11 @@ export function CreateExperimentWizard({
                             <p className="text-xs text-red-500">{errors[`comp-${index}-scenario`]}</p>
                           )}
                         </div>
-                        <div className="space-y-2">
-                          <Label>Model A <span className="text-red-500">*</span></Label>
-                          <Input
-                            placeholder="e.g., diamond-1b"
-                            value={comparison.modelA}
-                            onChange={(e) => updateComparison(comparison.id, 'modelA', e.target.value)}
-                            className={errors[`comp-${index}-modelA`] ? 'border-red-500' : ''}
-                          />
-                          {errors[`comp-${index}-modelA`] && (
-                            <p className="text-xs text-red-500">{errors[`comp-${index}-modelA`]}</p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Model B <span className="text-red-500">*</span></Label>
-                          <Input
-                            placeholder="e.g., genie-2b"
-                            value={comparison.modelB}
-                            onChange={(e) => updateComparison(comparison.id, 'modelB', e.target.value)}
-                            className={errors[`comp-${index}-modelB`] ? 'border-red-500' : ''}
-                          />
-                          {errors[`comp-${index}-modelB`] && (
-                            <p className="text-xs text-red-500">{errors[`comp-${index}-modelB`]}</p>
-                          )}
-                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Model A Video <span className="text-destructive">*</span></Label>
+                          <Label>Video A <span className="text-destructive">*</span></Label>
                           <select
                             value={comparison.videoAUrl}
                             onChange={(e) => updateComparison(comparison.id, 'videoAUrl', e.target.value)}
@@ -544,7 +514,7 @@ export function CreateExperimentWizard({
                               errors[`comp-${index}-videoA`] ? 'border-destructive' : 'border-border'
                             }`}
                           >
-                            <option value="">Select video for Model A</option>
+                            <option value="">Select Video A</option>
                             {uploadedVideos.map((video) => (
                               <option key={video.key} value={video.url}>
                                 {video.name}
@@ -556,7 +526,7 @@ export function CreateExperimentWizard({
                           )}
                         </div>
                         <div className="space-y-2">
-                          <Label>Model B Video <span className="text-destructive">*</span></Label>
+                          <Label>Video B <span className="text-destructive">*</span></Label>
                           <select
                             value={comparison.videoBUrl}
                             onChange={(e) => updateComparison(comparison.id, 'videoBUrl', e.target.value)}
@@ -564,7 +534,7 @@ export function CreateExperimentWizard({
                               errors[`comp-${index}-videoB`] ? 'border-destructive' : 'border-border'
                             }`}
                           >
-                            <option value="">Select video for Model B</option>
+                            <option value="">Select Video B</option>
                             {uploadedVideos.map((video) => (
                               <option key={video.key} value={video.url}>
                                 {video.name}
@@ -635,18 +605,6 @@ export function CreateExperimentWizard({
                           />
                           {errors[`comp-${index}-scenario`] && (
                             <p className="text-xs text-red-500">{errors[`comp-${index}-scenario`]}</p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Model <span className="text-red-500">*</span></Label>
-                          <Input
-                            placeholder="e.g., diamond-1b"
-                            value={task.modelA}
-                            onChange={(e) => updateComparison(task.id, 'modelA', e.target.value)}
-                            className={errors[`comp-${index}-modelA`] ? 'border-red-500' : ''}
-                          />
-                          {errors[`comp-${index}-modelA`] && (
-                            <p className="text-xs text-red-500">{errors[`comp-${index}-modelA`]}</p>
                           )}
                         </div>
                       </div>
@@ -890,8 +848,8 @@ export function CreateExperimentWizard({
                           <div className="space-y-1">
                             <p className="text-sm font-medium">
                               {experiment.evaluationMode === 'comparison' 
-                                ? `${comp.modelA} vs ${comp.modelB}`
-                                : `${comp.modelA} - Single Video Task`
+                                ? `${comp.modelA || 'Video A'} vs ${comp.modelB || 'Video B'}`
+                                : `${comp.modelA || 'Video'} - Single Video Task`
                               }
                             </p>
                             <p className="text-xs text-muted-foreground">

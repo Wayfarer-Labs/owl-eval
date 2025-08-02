@@ -275,18 +275,18 @@ export async function POST(request: NextRequest) {
 
     // Validate that all comparisons have required fields based on evaluation mode
     for (const comp of comparisons) {
-      if (!comp.scenarioId || !comp.modelA || !comp.videoAUrl) {
+      if (!comp.scenarioId || !comp.videoAUrl) {
         return NextResponse.json(
-          { error: 'All tasks must have scenarioId, modelA, and videoAUrl' },
+          { error: 'All tasks must have scenarioId and videoAUrl' },
           { status: 400 }
         );
       }
       
       // Additional validation for comparison mode
       if (evaluationMode === 'comparison') {
-        if (!comp.modelB || !comp.videoBUrl) {
+        if (!comp.videoBUrl) {
           return NextResponse.json(
-            { error: 'Comparison mode requires modelB and videoBUrl for all comparisons' },
+            { error: 'Comparison mode requires videoBUrl for all comparisons' },
             { status: 400 }
           );
         }
@@ -314,6 +314,47 @@ export async function POST(request: NextRequest) {
       counter++
     }
 
+    // Fetch video metadata to get model names
+    const videoUrls = evaluationMode === 'comparison' 
+      ? [...comparisons.map(c => c.videoAUrl), ...comparisons.map(c => c.videoBUrl)]
+      : comparisons.map(c => c.videoAUrl);
+    
+    const videos = await prisma.video.findMany({
+      where: {
+        url: { in: videoUrls }
+      },
+      select: {
+        url: true,
+        modelName: true
+      }
+    });
+    
+    const videoModelMap = new Map(videos.map(v => [v.url, v.modelName]));
+    
+    // Extract model names for config and validate
+    const modelNames = new Set<string>();
+    for (const comp of comparisons) {
+      const modelA = videoModelMap.get(comp.videoAUrl);
+      if (!modelA) {
+        return NextResponse.json(
+          { error: `Video ${comp.videoAUrl} does not have a model name. Please ensure all videos have model metadata.` },
+          { status: 400 }
+        );
+      }
+      modelNames.add(modelA);
+      
+      if (evaluationMode === 'comparison') {
+        const modelB = videoModelMap.get(comp.videoBUrl);
+        if (!modelB) {
+          return NextResponse.json(
+            { error: `Video ${comp.videoBUrl} does not have a model name. Please ensure all videos have model metadata.` },
+            { status: 400 }
+          );
+        }
+        modelNames.add(modelB);
+      }
+    }
+
     // Create experiment with either comparisons or video tasks based on evaluation mode
     const experimentData: any = {
       name,
@@ -324,9 +365,7 @@ export async function POST(request: NextRequest) {
       evaluationMode: evaluationMode,
       organizationId,
       config: {
-        models: evaluationMode === 'comparison' 
-          ? Array.from(new Set([...comparisons.map(c => c.modelA), ...comparisons.map(c => c.modelB)]))
-          : Array.from(new Set(comparisons.map(c => c.modelA))),
+        models: Array.from(modelNames),
         scenarios: Array.from(new Set(comparisons.map(c => c.scenarioId))),
         demographics: demographics || null
       },
@@ -338,7 +377,7 @@ export async function POST(request: NextRequest) {
       experimentData.singleVideoEvaluationTasks = {
         create: comparisons.map(comp => ({
           scenarioId: comp.scenarioId,
-          modelName: comp.modelA,
+          modelName: videoModelMap.get(comp.videoAUrl)!,
           videoPath: comp.videoAUrl,
           metadata: comp.metadata || {}
         }))
@@ -348,8 +387,8 @@ export async function POST(request: NextRequest) {
       experimentData.twoVideoComparisonTasks = {
         create: comparisons.map(comp => ({
           scenarioId: comp.scenarioId,
-          modelA: comp.modelA,
-          modelB: comp.modelB,
+          modelA: videoModelMap.get(comp.videoAUrl)!,
+          modelB: videoModelMap.get(comp.videoBUrl)!,
           videoAPath: comp.videoAUrl,
           videoBPath: comp.videoBUrl,
           metadata: comp.metadata || {}

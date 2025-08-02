@@ -44,7 +44,10 @@ export async function POST(request: NextRequest) {
     // If this is an anonymous user (no participant ID from database)
     if (!participantId || participantId === 'anonymous') {
       // Use session identifier only for anonymous users (consistent across comparisons)
-      const sessionId = clientMetadata?.sessionId || 'anon-session';
+      const sessionId = clientMetadata?.sessionId;
+      if (!sessionId) {
+        throw new Error('Session ID is required for anonymous users');
+      }
       actualParticipantId = `anon-${sessionId}`;
       
       // Check if we need to create an anonymous participant record
@@ -148,12 +151,15 @@ export async function GET(request: NextRequest) {
     // Handle anonymous users
     let actualParticipantId = participantId;
     if (!participantId || participantId === 'anonymous') {
-      actualParticipantId = `anon-${sessionId || 'default'}`;
+      if (!sessionId) {
+        throw new Error('Session ID is required for anonymous users');
+      }
+      actualParticipantId = `anon-${sessionId}`;
     }
 
-    // Ensure actualParticipantId is never null
+    // Ensure actualParticipantId exists
     if (!actualParticipantId) {
-      actualParticipantId = 'anonymous-user';
+      throw new Error('Participant ID could not be determined');
     }
 
     const evaluation = await prisma.twoVideoComparisonSubmission.findUnique({
