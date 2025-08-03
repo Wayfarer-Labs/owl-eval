@@ -70,6 +70,7 @@ jobs:
           STACK_SECRET_SERVER_KEY: ${{ secrets.STACK_SECRET_SERVER_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           BASE_URL: ${{ secrets.BASE_URL }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.BASE_URL }}
       
       # Build and push Docker image to Artifact Registry
       - name: Build Docker image
