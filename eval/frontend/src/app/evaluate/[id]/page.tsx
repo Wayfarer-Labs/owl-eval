@@ -193,6 +193,12 @@ export default function EvaluatePage() {
           return
         }
 
+        console.log('🎬 Video task data received:', {
+          videoPath: videoData.videoPath,
+          modelName: videoData.modelName,
+          scenarioId: videoData.scenarioId
+        });
+        
         setVideoTask(videoData)
         setEvaluationMode('single_video')
 
@@ -275,6 +281,13 @@ export default function EvaluatePage() {
           }
         }
 
+        console.log('🎬 Comparison data received:', {
+          videoAPath: comparisonData.videoAPath,
+          videoBPath: comparisonData.videoBPath,
+          modelA: comparisonData.modelA,
+          modelB: comparisonData.modelB
+        });
+        
         setComparison(comparisonData)
         setEvaluationMode('comparison')
 
@@ -1318,7 +1331,10 @@ export default function EvaluatePage() {
                   <div className="relative pt-[56.25%]">
                     <ReactPlayer
                       ref={playerARef}
-                      url={comparison?.model_a_video_path}
+                      url={(() => {
+                        console.log('Video A URL:', comparison?.model_a_video_path);
+                        return comparison?.model_a_video_path;
+                      })()}
                       width="100%"
                       height="100%"
                       loop
@@ -1452,7 +1468,10 @@ export default function EvaluatePage() {
                   <div className="relative pt-[56.25%]">
                     <ReactPlayer
                       ref={playerBRef}
-                      url={comparison?.model_b_video_path}
+                      url={(() => {
+                        console.log('Video B URL:', comparison?.model_b_video_path);
+                        return comparison?.model_b_video_path;
+                      })()}
                       width="100%"
                       height="100%"
                       loop
@@ -1570,7 +1589,10 @@ export default function EvaluatePage() {
                 <div className="relative pt-[56.25%]">
                   <ReactPlayer
                     ref={playerARef}
-                    url={videoTask?.videoPath}
+                    url={(() => {
+                      console.log('Single Video URL:', videoTask?.videoPath);
+                      return videoTask?.videoPath;
+                    })()}
                     width="100%"
                     height="100%"
                     loop
