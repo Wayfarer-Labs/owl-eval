@@ -81,6 +81,7 @@ jobs:
             --build-arg STACK_SECRET_SERVER_KEY="${{ secrets.STACK_SECRET_SERVER_KEY }}" \
             --build-arg DATABASE_URL="${{ secrets.DATABASE_URL }}" \
             --build-arg BASE_URL="${{ secrets.BASE_URL }}" \
+            --build-arg NEXT_PUBLIC_APP_URL="${{ secrets.NEXT_PUBLIC_APP_URL }}" \
             --tag "${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}" \
             --tag "${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}/${{ env.SERVICE_NAME }}:latest" \
             ./eval/frontend
