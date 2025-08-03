@@ -117,6 +117,14 @@ export default function EvaluatePage() {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
+  
+  // Debug environment variables on page load
+  console.log('🔧 Environment debug on page load:', {
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    windowLocation: typeof window !== 'undefined' ? window.location.href : 'server-side',
+    allNextPublicVars: Object.keys(process.env).filter(key => key.startsWith('NEXT_PUBLIC_'))
+  });
 
   const [comparison, setComparison] = useState<Comparison | null>(null)
   const [videoTask, setVideoTask] = useState<VideoTask | null>(null)
