@@ -65,18 +65,31 @@ export function getVideoKey(experimentId: string, comparisonId: string, modelLab
 // Generate proxy URL that goes through our API route instead of direct Tigris access
 export function getProxyVideoUrl(key: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  
+  console.log('🔧 getProxyVideoUrl debug:', {
+    key,
+    NEXT_PUBLIC_APP_URL: baseUrl,
+    windowLocation: typeof window !== 'undefined' ? window.location.href : 'server-side',
+    NODE_ENV: process.env.NODE_ENV
+  });
+  
   if (!baseUrl) {
     // Fallback: try to detect from window.location in browser
     if (typeof window !== 'undefined') {
       const protocol = window.location.protocol;
       const host = window.location.host;
-      return `${protocol}//${host}/api/video/${key}`;
+      const generatedUrl = `${protocol}//${host}/api/video/${key}`;
+      console.log('🔧 Using window.location fallback:', generatedUrl);
+      return generatedUrl;
     } else {
       // Server-side: NEXT_PUBLIC_APP_URL must be set properly in production
       throw new Error('NEXT_PUBLIC_APP_URL environment variable is required for server-side video URL generation');
     }
   }
-  return `${baseUrl}/api/video/${key}`;
+  
+  const generatedUrl = `${baseUrl}/api/video/${key}`;
+  console.log('🔧 Using NEXT_PUBLIC_APP_URL:', generatedUrl);
+  return generatedUrl;
 }
 
 // Convert any video URL to use the correct current domain
