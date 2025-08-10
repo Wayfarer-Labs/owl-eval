@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prolificService } from '@/lib/services/prolific'
+import { ProlificService } from '@/lib/services/prolific'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
@@ -35,18 +35,21 @@ export async function POST(request: NextRequest) {
     }
 
     // If this is a Prolific participant, reject their submission
-    if (participant.prolificId && participant.experiment?.prolificStudyId) {
+    if (participant.prolificId && participant.experiment?.prolificStudyId && participant.experiment?.organizationId) {
       try {
+        // Create organization-specific Prolific service
+        const organizationProlificService = await ProlificService.createForOrganization(participant.experiment.organizationId)
+        
         // Find the Prolific submission for this participant
         const studyId = participant.experiment.prolificStudyId
-        const submissionsData = await prolificService.instance.getSubmissions(studyId)
+        const submissionsData = await organizationProlificService.getSubmissions(studyId)
         const submission = submissionsData.results.find(
           (sub: any) => sub['Participant id'] === participant.prolificId
         )
 
         if (submission) {
           // Reject the submission on Prolific
-          const rejectionResult = await prolificService.instance.processSubmissions({
+          const rejectionResult = await organizationProlificService.processSubmissions({
             action: 'reject',
             submissionIds: [submission['Submission id']],
             rejectionReason: reason || 'Failed gold-standard items'
