@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth-middleware';
-import { prolificService } from '@/lib/services/prolific';
+import { prolificService, ProlificService } from '@/lib/services/prolific';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,7 +13,20 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { experimentId, title, description, reward, totalParticipants } = body;
 
-    const prolificStudy = await prolificService.instance.createStudy({
+    // Get the experiment to find its organization
+    const experiment = await prisma.experiment.findUnique({
+      where: { id: experimentId },
+      select: { organizationId: true }
+    });
+
+    if (!experiment) {
+      return NextResponse.json({ error: 'Experiment not found' }, { status: 404 });
+    }
+
+    // Create organization-specific Prolific service
+    const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+
+    const prolificStudy = await organizationProlificService.createStudy({
       experimentId,
       title,
       description,

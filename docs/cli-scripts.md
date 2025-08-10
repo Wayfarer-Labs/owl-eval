@@ -158,8 +158,8 @@ AWS_SECRET_ACCESS_KEY="your-secret-key"
 AWS_REGION="us-east-1"
 TIGRIS_BUCKET_NAME="your-bucket"
 
-# Prolific (optional)
-PROLIFIC_API_TOKEN="your-prolific-token"
+# Prolific API keys are now configured per-organization
+# Go to Organization Settings > Integrations to add your Prolific API key
 ```
 
 ### Organization Support
