@@ -669,35 +669,6 @@ export class ProlificService {
     };
   }
 
-  async getExperimentsWithProlificStudies() {
-    return prisma.experiment.findMany({
-      where: {
-        prolificStudyId: { not: null }
-      },
-      select: {
-        id: true,
-        name: true,
-        prolificStudyId: true,
-        status: true,
-        createdAt: true,
-        _count: {
-          select: {
-            participants: {
-              where: {
-                id: {
-                  not: {
-                    startsWith: 'anon-session-'
-                  }
-                }
-              }
-            },
-            twoVideoComparisonSubmissions: true,
-            twoVideoComparisonTasks: true
-          }
-        }
-      }
-    });
-  }
 }
 
 // Organization-specific Prolific service factory

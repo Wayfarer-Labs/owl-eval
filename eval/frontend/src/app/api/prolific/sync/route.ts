@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
       select: { organizationId: true }
     });
 
-    if (!experiment) {
-      return NextResponse.json({ error: 'Study not found' }, { status: 404 });
+    if (!experiment || !experiment.organizationId) {
+      return NextResponse.json({ error: 'Study not found or missing organization' }, { status: 404 });
     }
 
     // Create organization-specific Prolific service

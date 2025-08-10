@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
       select: { organizationId: true }
     });
 
-    if (!experiment) {
-      return NextResponse.json({ error: 'Experiment not found' }, { status: 404 });
+    if (!experiment || !experiment.organizationId) {
+      return NextResponse.json({ error: 'Experiment not found or missing organization' }, { status: 404 });
     }
 
     // Create organization-specific Prolific service
@@ -50,14 +50,52 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
-    // Get experiments with Prolific studies
-    const experiments = await prolificService.instance.getExperimentsWithProlificStudies();
+    // Get experiments with Prolific studies directly from database
+    const experiments = await prisma.experiment.findMany({
+      where: {
+        prolificStudyId: { not: null }
+      },
+      select: {
+        id: true,
+        name: true,
+        prolificStudyId: true,
+        organizationId: true,
+        status: true,
+        createdAt: true,
+        _count: {
+          select: {
+            participants: {
+              where: {
+                id: {
+                  not: {
+                    startsWith: 'anon-session-'
+                  }
+                }
+              }
+            },
+            twoVideoComparisonSubmissions: true,
+            twoVideoComparisonTasks: true
+          }
+        }
+      }
+    });
 
     // Fetch study details from Prolific
     const studies = await Promise.all(
       experiments.map(async (exp) => {
         try {
-          const study = await prolificService.instance.getStudy(exp.prolificStudyId!);
+          if (!exp.organizationId) {
+            return {
+              experimentId: exp.id,
+              experimentName: exp.name,
+              prolificStudyId: exp.prolificStudyId,
+              error: 'Missing organization'
+            };
+          }
+          
+          // Create organization-specific Prolific service for each experiment
+          const organizationProlificService = await ProlificService.createForOrganization(exp.organizationId);
+          const study = await organizationProlificService.getStudy(exp.prolificStudyId!);
           return {
             experimentId: exp.id,
             experimentName: exp.name,
