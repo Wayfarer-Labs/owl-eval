@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stackServerApp } from '@/stack';
-import { prolificService } from '@/lib/services/prolific';
+import { prolificService, ProlificService } from '@/lib/services/prolific';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(
   req: NextRequest,
@@ -13,7 +14,20 @@ export async function GET(
     }
 
     const { studyId } = await params;
-    const data = await prolificService.instance.getSubmissions(studyId);
+    
+    // Get the experiment to find its organization
+    const experiment = await prisma.experiment.findFirst({
+      where: { prolificStudyId: studyId },
+      select: { organizationId: true }
+    });
+
+    if (!experiment) {
+      return NextResponse.json({ error: 'Study not found' }, { status: 404 });
+    }
+
+    // Create organization-specific Prolific service
+    const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+    const data = await organizationProlificService.getSubmissions(studyId);
     return NextResponse.json(data);
 
   } catch (error) {
@@ -41,7 +55,21 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
-    const results = await prolificService.instance.processSubmissions({
+    const { studyId } = await params;
+    
+    // Get the experiment to find its organization
+    const experiment = await prisma.experiment.findFirst({
+      where: { prolificStudyId: studyId },
+      select: { organizationId: true }
+    });
+
+    if (!experiment) {
+      return NextResponse.json({ error: 'Study not found' }, { status: 404 });
+    }
+
+    // Create organization-specific Prolific service
+    const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+    const results = await organizationProlificService.processSubmissions({
       action,
       submissionIds,
       rejectionReason

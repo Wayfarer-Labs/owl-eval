@@ -23,8 +23,9 @@ npm run dev
 - `STACK_SECRET_SERVER_KEY` - Stack Auth server secret
 
 ### Optional
-- `PROLIFIC_API_TOKEN` - For Prolific integration
 - `NEXT_PUBLIC_APP_URL` - Base URL for callbacks
+
+**Note**: Prolific API keys are now configured per-organization in the organization settings UI, not via environment variables.
 
 ## CLI Commands
 

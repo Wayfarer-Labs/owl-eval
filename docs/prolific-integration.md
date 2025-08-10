@@ -47,14 +47,18 @@ The `Participant` model has been extended with:
   2. Call Prolific API to reject submission
   3. Show rejection message (no home button)
 
-## Environment Configuration
+## Organization Configuration
 
-Add to `.env.local`:
-```bash
-PROLIFIC_API_KEY=your_prolific_api_token_here
-```
+Prolific API keys are now configured per-organization:
+
+1. Navigate to your organization settings page: `/{organizationSlug}/settings`
+2. Go to the "Integrations" tab
+3. Enter your Prolific API key
+4. Save the settings
 
 Get your API key from: Prolific workspace settings → Integrations → API tokens
+
+**Note**: Each organization must have its own Prolific API key configured. There is no global fallback.
 
 ## Prolific API Details
 
@@ -130,7 +134,7 @@ API returns detailed status information:
 
 To activate this functionality:
 1. Run database migration to add new fields
-2. Set `PROLIFIC_API_KEY` environment variable
+2. Configure Prolific API key in your organization settings
 3. Remove `as any` casts once migration is complete
 4. Test with sandbox Prolific workspace first
 

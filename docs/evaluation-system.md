@@ -129,10 +129,10 @@ See [CLI Scripts Documentation](./cli-scripts.md) for complete command reference
 
 For crowd-sourced evaluations:
 
-1. Set up Prolific API token:
-```bash
-export PROLIFIC_API_TOKEN=your-token
-```
+1. Configure Prolific API key in your organization settings:
+   - Navigate to `/{organizationSlug}/settings`
+   - Go to the "Integrations" tab
+   - Enter your Prolific API key
 
 2. Create and launch a study:
 ```bash

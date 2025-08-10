@@ -17,7 +17,7 @@ import chalk from 'chalk';
 import { generateSlug, isValidSlug, slugify } from '../frontend/src/lib/utils/slug';
 import { requireAuth, clearAuth } from './auth';
 import { prisma } from './prisma-client';
-import { prolificService } from '../frontend/src/lib/services/prolific';
+import { ProlificService } from '../frontend/src/lib/services/prolific';
 // Don't import ExperimentService - it uses frontend prisma client
 // import { ExperimentService } from '../frontend/src/lib/experiment-service';
 import { getUserOrganizations } from './cli-organization';
@@ -1862,7 +1862,9 @@ program
         
         console.log(chalk.yellow('\n🔄 Creating study on Prolific...'));
         
-        const prolificStudy = await prolificService.instance.instance.createStudy({
+        // Create organization-specific Prolific service
+        const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+        const prolificStudy = await organizationProlificService.createStudy({
           experimentId: experiment.id,
           title,
           description,
@@ -2051,8 +2053,21 @@ program
           studyId = await question(chalk.cyan('Prolific study ID to publish: '));
         }
         
+        // Get experiment to find organization
+        const experiment = await prisma.experiment.findFirst({
+          where: { prolificStudyId: studyId }
+        });
+        
+        if (!experiment) {
+          console.log(chalk.red(`No experiment found for Prolific study ${studyId}`));
+          return;
+        }
+        
+        // Create organization-specific Prolific service
+        const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+        
         // Get current status
-        const study = await prolificService.instance.getStudy(studyId);
+        const study = await organizationProlificService.getStudy(studyId);
         
         if (study.status !== 'UNPUBLISHED') {
           console.log(chalk.yellow(`Study is already ${study.status.toLowerCase()}. Cannot publish.`));
@@ -2073,22 +2088,8 @@ program
         
         console.log(chalk.yellow('🔄 Publishing study...'));
         
-        // Make API call directly to avoid frontend prisma issues
-        const response = await fetch(`https://api.prolific.com/api/v1/studies/${studyId}/transition/`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${process.env.PROLIFIC_API_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ action: 'PUBLISH' })
-        });
-        
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(`Prolific API error (${response.status}): ${JSON.stringify(error)}`);
-        }
-        
-        const updatedStudy = await response.json();
+        // Use organization-specific service to publish
+        const updatedStudy = await organizationProlificService.updateStudyStatus(studyId, { action: 'publish' });
         
         console.log(chalk.green.bold('\n✅ Study published successfully!'));
         console.log(chalk.white('Status:'), chalk.green(updatedStudy.status));
@@ -2122,21 +2123,21 @@ program
         console.log(chalk.yellow('🔄 Starting study...'));
         
         // Make API call directly to avoid frontend prisma issues
-        const response = await fetch(`https://api.prolific.com/api/v1/studies/${studyId}/transition/`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${process.env.PROLIFIC_API_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ action: 'START' })
+        // Get experiment to find organization
+        const experiment = await prisma.experiment.findFirst({
+          where: { prolificStudyId: studyId }
         });
         
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(`Prolific API error (${response.status}): ${JSON.stringify(error)}`);
+        if (!experiment) {
+          console.log(chalk.red(`No experiment found for Prolific study ${studyId}`));
+          return;
         }
         
-        const updatedStudy = await response.json();
+        // Create organization-specific Prolific service
+        const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+        
+        // Use organization-specific service to start
+        const updatedStudy = await organizationProlificService.updateStudyStatus(studyId, { action: 'start' });
         
         console.log(chalk.green.bold('\n✅ Study started successfully!'));
         console.log(chalk.white('Status:'), chalk.green(updatedStudy.status));
@@ -2170,21 +2171,21 @@ program
         console.log(chalk.yellow('🔄 Pausing study...'));
         
         // Make API call directly to avoid frontend prisma issues
-        const response = await fetch(`https://api.prolific.com/api/v1/studies/${studyId}/transition/`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${process.env.PROLIFIC_API_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ action: 'PAUSE' })
+        // Get experiment to find organization
+        const experiment = await prisma.experiment.findFirst({
+          where: { prolificStudyId: studyId }
         });
         
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(`Prolific API error (${response.status}): ${JSON.stringify(error)}`);
+        if (!experiment) {
+          console.log(chalk.red(`No experiment found for Prolific study ${studyId}`));
+          return;
         }
         
-        const updatedStudy = await response.json();
+        // Create organization-specific Prolific service
+        const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+        
+        // Use organization-specific service to pause
+        const updatedStudy = await organizationProlificService.updateStudyStatus(studyId, { action: 'pause' });
         
         console.log(chalk.green.bold('\n✅ Study paused successfully!'));
         console.log(chalk.white('Status:'), chalk.green(updatedStudy.status));
@@ -2224,21 +2225,21 @@ program
         console.log(chalk.yellow('🔄 Stopping study...'));
         
         // Make API call directly to avoid frontend prisma issues
-        const response = await fetch(`https://api.prolific.com/api/v1/studies/${studyId}/transition/`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Token ${process.env.PROLIFIC_API_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ action: 'STOP' })
+        // Get experiment to find organization
+        const experiment = await prisma.experiment.findFirst({
+          where: { prolificStudyId: studyId }
         });
         
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(`Prolific API error (${response.status}): ${JSON.stringify(error)}`);
+        if (!experiment) {
+          console.log(chalk.red(`No experiment found for Prolific study ${studyId}`));
+          return;
         }
         
-        const updatedStudy = await response.json();
+        // Create organization-specific Prolific service
+        const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+        
+        // Use organization-specific service to stop
+        const updatedStudy = await organizationProlificService.updateStudyStatus(studyId, { action: 'stop' });
         
         console.log(chalk.green.bold('\n✅ Study stopped successfully!'));
         console.log(chalk.white('Status:'), chalk.green(updatedStudy.status));

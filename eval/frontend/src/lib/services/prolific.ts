@@ -3,7 +3,6 @@ import Papa from 'papaparse';
 import { shouldUpdateExperimentStatus, ExperimentStatus } from '../utils/status';
 
 const PROLIFIC_API_URL = 'https://api.prolific.com';
-const PROLIFIC_API_TOKEN = process.env.PROLIFIC_API_TOKEN;
 
 export interface ProlificStudy {
   id: string;
@@ -67,12 +66,12 @@ export function generateCompletionCode(): string {
 }
 
 export class ProlificService {
-  constructor(private apiToken?: string, private organizationId?: string) {
-    // Get token from parameter, organization settings, or environment at runtime
-    this.apiToken = apiToken || process.env.PROLIFIC_API_TOKEN;
+  constructor(private apiToken: string, private organizationId?: string) {
+    // Token must be provided - no fallback to environment variable
+    this.apiToken = apiToken;
     this.organizationId = organizationId;
     if (!this.apiToken) {
-      throw new Error('Prolific API token not configured');
+      throw new Error('Prolific API token not configured for organization');
     }
   }
 
@@ -92,13 +91,7 @@ export class ProlificService {
       const orgProlificKey = settings.prolificApiKey;
 
       if (!orgProlificKey) {
-        // Fall back to global API key if organization doesn't have one configured
-        const globalKey = process.env.PROLIFIC_API_TOKEN;
-        if (!globalKey) {
-          throw new Error(`No Prolific API key configured for organization ${organizationId} and no global fallback available`);
-        }
-        console.warn(`Using global Prolific API key for organization ${organizationId} - consider configuring per-organization credentials`);
-        return new ProlificService(globalKey, organizationId);
+        throw new Error(`No Prolific API key configured for organization ${organizationId}. Please configure a Prolific API key in organization settings.`);
       }
 
       return new ProlificService(orgProlificKey, organizationId);
@@ -707,17 +700,8 @@ export class ProlificService {
   }
 }
 
-let _prolificService: ProlificService | null = null;
-
+// Organization-specific Prolific service factory
 export const prolificService = {
-  get instance(): ProlificService {
-    if (!_prolificService) {
-      _prolificService = new ProlificService();
-    }
-    return _prolificService;
-  },
-
-  // New method for organization-specific instances
   async forOrganization(organizationId: string): Promise<ProlificService> {
     return ProlificService.createForOrganization(organizationId);
   }

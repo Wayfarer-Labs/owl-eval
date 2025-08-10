@@ -19,9 +19,9 @@ interface AppConfig {
     nodeEnv: string;
   };
   
-  // Prolific
-  prolific: {
-    apiToken?: string;
+  // Prolific - organization-specific only, no global token
+  prolific?: {
+    // Reserved for future use
   };
   
   // Storage
@@ -95,9 +95,7 @@ export function getConfig(): AppConfig {
       nodeEnv: getEnvVar('NODE_ENV', 'development'),
     },
     
-    prolific: {
-      apiToken: getOptionalEnvVar('PROLIFIC_API_TOKEN'),
-    },
+    // Prolific configuration removed - now organization-specific only
     
     storage: {
       dataDir: getEnvVar('DATA_DIR', './data'),

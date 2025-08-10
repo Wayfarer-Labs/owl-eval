@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth-middleware';
-import { prolificService } from '@/lib/services/prolific';
+import { prolificService, ProlificService } from '@/lib/services/prolific';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(
   req: NextRequest,
@@ -13,7 +14,20 @@ export async function GET(
     }
 
     const { studyId } = await params;
-    const study = await prolificService.instance.getStudy(studyId);
+    
+    // Get the experiment to find its organization
+    const experiment = await prisma.experiment.findFirst({
+      where: { prolificStudyId: studyId },
+      select: { organizationId: true }
+    });
+
+    if (!experiment) {
+      return NextResponse.json({ error: 'Study not found' }, { status: 404 });
+    }
+
+    // Create organization-specific Prolific service
+    const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+    const study = await organizationProlificService.getStudy(studyId);
     return NextResponse.json(study);
 
   } catch (error) {
@@ -37,7 +51,19 @@ export async function PUT(
     const body = await req.json();
     const { action } = body;
 
-    const updatedStudy = await prolificService.instance.updateStudyStatus(studyId, { action });
+    // Get the experiment to find its organization
+    const experiment = await prisma.experiment.findFirst({
+      where: { prolificStudyId: studyId },
+      select: { organizationId: true }
+    });
+
+    if (!experiment) {
+      return NextResponse.json({ error: 'Study not found' }, { status: 404 });
+    }
+
+    // Create organization-specific Prolific service
+    const organizationProlificService = await ProlificService.createForOrganization(experiment.organizationId);
+    const updatedStudy = await organizationProlificService.updateStudyStatus(studyId, { action });
     return NextResponse.json(updatedStudy);
 
   } catch (error) {
