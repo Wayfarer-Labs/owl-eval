@@ -71,7 +71,9 @@ export async function POST(
 
     // Check if user has permission to create experiments (ADMIN or OWNER)
     if (!['OWNER', 'ADMIN'].includes(userOrgMembership.role)) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+      return NextResponse.json({ 
+        error: `Insufficient permissions. You need OWNER or ADMIN role in this organization to create experiments. Your current role is: ${userOrgMembership.role}. Please contact your organization owner to upgrade your permissions.` 
+      }, { status: 403 });
     }
 
     const body = await request.json();

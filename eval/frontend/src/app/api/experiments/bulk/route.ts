@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateUniqueSlug } from '@/lib/utils/slug'
+import { requireAuth } from '@/lib/auth-middleware'
 
 interface ComparisonMatrix {
   scenarios: string[]
@@ -180,6 +181,35 @@ async function generateMatrixComparisons(matrix: ComparisonMatrix): Promise<Vide
 }
 
 export async function POST(request: NextRequest) {
+  // Check authentication
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) {
+    return authResult;
+  }
+
+  // Get user's organization
+  let organizationId = null;
+  if (authResult.user?.id) {
+    try {
+      const { getUserOrganizations } = await import('@/lib/organization');
+      const organizations = await getUserOrganizations(authResult.user.id);
+      organizationId = organizations[0]?.organization?.id || null;
+      
+      if (!organizationId) {
+        return NextResponse.json(
+          { error: 'No organization found. Please create or join an organization first.' },
+          { status: 400 }
+        );
+      }
+    } catch (error) {
+      console.warn('Could not get user organization for bulk experiment creation:', error);
+      return NextResponse.json(
+        { error: 'Failed to get organization context' },
+        { status: 500 }
+      );
+    }
+  }
+
   try {
     const body: BulkExperimentRequest = await request.json()
     
@@ -221,6 +251,8 @@ export async function POST(request: NextRequest) {
           slug: uniqueSlug,
           group: body.group || '',
           status: 'draft',
+          organizationId: organizationId,
+          createdBy: authResult.user?.id || null,
           config: {
             mode: body.mode,
             matrix: body.matrix as any,

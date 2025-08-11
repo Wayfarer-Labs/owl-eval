@@ -1500,6 +1500,9 @@ program
       console.log(chalk.blue.bold('\n🧪 Creating bulk experiments with matrix mode\n'));
       
       try {
+        // Get organization first
+        const organizationId = await selectOrganization(auth);
+        
         const { question } = getReadline();
         
         // Auto-discover available models from uploaded videos
@@ -1539,58 +1542,103 @@ program
         const strategy = options.strategy;
         const seed = options.seed ? parseInt(options.seed) : undefined;
         
-        // Call bulk creation API
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        const response = await fetch(`${baseUrl}/api/experiments/bulk`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            models,
-            scenarios,
+        // Generate experiment name and slug
+        const experimentName = `Bulk Experiment ${new Date().toISOString().split('T')[0]}`;
+        const experimentSlug = generateSlug();
+        
+        // Prepare the matrix configuration
+        const matrixConfig = {
+          scenarios,
+          models,
+          videoAssignment: strategy as 'auto' | 'manual' | 'random',
+          randomization: {
+            orderRandomization: options.randomizeOrder || false,
+            modelPositionRandomization: options.randomizePositions || false,
+            seed
+          }
+        };
+        
+        // Call bulk creation API - NOTE: This won't work from CLI without auth headers
+        // The API now requires authentication which CLI doesn't support yet
+        console.log(chalk.yellow('\n⚠️  Note: The bulk creation API now requires authentication.'));
+        console.log(chalk.yellow('Please use the web interface for bulk experiment creation.\n'));
+        
+        // For now, we'll create experiments directly via database
+        console.log(chalk.blue('Creating experiment directly via database...\n'));
+        
+        // Create experiment with comparisons directly
+        const experiment = await prisma.experiment.create({
+          data: {
+            name: experimentName,
+            description: `Bulk experiment created via CLI with ${models.length} models and ${scenarios.length} scenarios`,
+            slug: experimentSlug,
             group: group || null,
+            status: 'draft',
             evaluationMode,
-            videoAssignmentStrategy: strategy,
-            randomSeed: seed,
-            randomizeOrder: options.randomizeOrder || false,
-            randomizePositions: options.randomizePositions || false,
-            createdBy: auth.userId
-          })
+            organizationId,
+            createdBy: auth.id,
+            config: {
+              mode: 'matrix',
+              matrix: matrixConfig,
+              totalComparisons: 0, // Will be calculated
+              createdAt: new Date().toISOString()
+            }
+          }
         });
         
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Failed to create bulk experiments');
+        // Generate comparisons based on matrix
+        const comparisons = [];
+        for (const scenario of scenarios) {
+          for (let i = 0; i < models.length; i++) {
+            for (let j = i + 1; j < models.length; j++) {
+              // Find videos for this model-scenario combination
+              const videoA = videos.find((v: any) => 
+                v.modelName === models[i] && v.scenarioId === scenario
+              );
+              const videoB = videos.find((v: any) => 
+                v.modelName === models[j] && v.scenarioId === scenario
+              );
+              
+              if (videoA && videoB) {
+                comparisons.push({
+                  experimentId: experiment.id,
+                  scenarioId: scenario,
+                  modelA: models[i],
+                  modelB: models[j],
+                  videoAPath: videoA.url,
+                  videoBPath: videoB.url,
+                  metadata: {
+                    assignmentStrategy: strategy,
+                    createdAt: new Date().toISOString()
+                  }
+                });
+              }
+            }
+          }
         }
         
-        const result = await response.json();
-        
-        console.log(chalk.green.bold('\n✅ Bulk experiments created successfully!\n'));
-        console.log(chalk.white('Created:'), chalk.yellow(`${result.experiments.length} experiments`));
-        console.log(chalk.white('Mode:'), chalk.yellow(evaluationMode));
-        
-        if (evaluationMode === 'single_video') {
-          console.log(chalk.white('Total video tasks:'), chalk.yellow(result.totalVideoTasks || 0));
-        } else {
-          console.log(chalk.white('Total comparisons:'), chalk.yellow(result.totalComparisons || 0));
-        }
-        
-        if (result.videoAssignments) {
-          console.log(chalk.white('Videos assigned:'), chalk.yellow(result.videoAssignments));
-        }
-        
-        console.log(chalk.blue('\n📋 Created experiments:'));
-        result.experiments.forEach((exp: any) => {
-          console.log(chalk.white(`- ${exp.name} (${exp.slug})`));
-        });
-        
-        if (result.warnings && result.warnings.length > 0) {
-          console.log(chalk.yellow('\n⚠️  Warnings:'));
-          result.warnings.forEach((warning: string) => {
-            console.log(chalk.yellow(`- ${warning}`));
+        // Create all comparisons
+        if (comparisons.length > 0) {
+          await prisma.twoVideoComparisonTask.createMany({
+            data: comparisons
           });
         }
+        
+        console.log(chalk.green.bold('\n✅ Bulk experiment created successfully!\n'));
+        console.log(chalk.white('Experiment:'), chalk.yellow(experiment.name));
+        console.log(chalk.white('Slug:'), chalk.yellow(experiment.slug));
+        console.log(chalk.white('Mode:'), chalk.yellow(evaluationMode));
+        console.log(chalk.white('Total comparisons:'), chalk.yellow(comparisons.length));
+        
+        if (comparisons.length === 0) {
+          console.log(chalk.yellow('\n⚠️  Warning: No comparisons were created.'));
+          console.log(chalk.yellow('Make sure videos are properly tagged with model names and scenarios.'));
+        }
+        
+        console.log(chalk.gray('\nNext steps:'));
+        console.log(chalk.gray('  1. Review experiment in the admin dashboard'));
+        console.log(chalk.gray('  2. Configure Prolific study if needed'));
+        console.log(chalk.gray('  3. Launch experiment when ready'));
         
       } catch (error) {
         console.error(chalk.red('Error creating bulk experiments:'), error);

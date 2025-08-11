@@ -279,7 +279,8 @@ export function BulkExperimentWizard({
       })
 
       if (!response.ok) {
-        throw new Error('Failed to create experiment')
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to create experiment')
       }
 
       const result = await response.json()
@@ -312,7 +313,7 @@ export function BulkExperimentWizard({
       console.error('Create experiment error:', error)
       toast({
         title: 'Creation failed',
-        description: 'Failed to create experiment',
+        description: error instanceof Error ? error.message : 'Failed to create experiment',
         variant: 'destructive'
       })
     } finally {
