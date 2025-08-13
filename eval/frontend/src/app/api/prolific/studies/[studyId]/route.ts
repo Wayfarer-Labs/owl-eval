@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth-middleware';
+import { requireAuth } from '@/lib/auth-middleware';
+import { checkOrganizationAccess } from '@/lib/organization';
 import { prolificService, ProlificService } from '@/lib/services/prolific';
 import { prisma } from '@/lib/prisma';
 
@@ -8,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ studyId: string }> }
 ) {
   try {
-    const authResult = await requireAdmin(req);
+    const authResult = await requireAuth(req);
     if (authResult instanceof NextResponse) {
       return authResult;
     }
@@ -23,6 +24,12 @@ export async function GET(
 
     if (!experiment || !experiment.organizationId) {
       return NextResponse.json({ error: 'Study not found or missing organization' }, { status: 404 });
+    }
+
+    // Check if user has access to the organization
+    const userId = authResult.user?.id;
+    if (!userId || !await checkOrganizationAccess(experiment.organizationId, userId, 'MEMBER')) {
+      return NextResponse.json({ error: 'Access denied to this organization' }, { status: 403 });
     }
 
     // Create organization-specific Prolific service
@@ -42,7 +49,7 @@ export async function PUT(
   { params }: { params: Promise<{ studyId: string }> }
 ) {
   try {
-    const authResult = await requireAdmin(req);
+    const authResult = await requireAuth(req);
     if (authResult instanceof NextResponse) {
       return authResult;
     }
@@ -59,6 +66,12 @@ export async function PUT(
 
     if (!experiment || !experiment.organizationId) {
       return NextResponse.json({ error: 'Study not found or missing organization' }, { status: 404 });
+    }
+
+    // Check if user has admin access to the organization
+    const userId = authResult.user?.id;
+    if (!userId || !await checkOrganizationAccess(experiment.organizationId, userId, 'ADMIN')) {
+      return NextResponse.json({ error: 'Admin access required for this organization' }, { status: 403 });
     }
 
     // Create organization-specific Prolific service
