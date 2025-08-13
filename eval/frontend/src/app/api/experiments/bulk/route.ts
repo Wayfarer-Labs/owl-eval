@@ -194,6 +194,7 @@ export async function POST(request: NextRequest) {
       const { getUserOrganizations } = await import('@/lib/organization');
       const organizations = await getUserOrganizations(authResult.user.id);
       organizationId = organizations?.[0]?.organization?.id || null;
+
       
       if (!organizationId) {
         return NextResponse.json(
