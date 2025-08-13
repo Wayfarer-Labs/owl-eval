@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth-middleware';
+import { requireAuth } from '@/lib/auth-middleware';
+import { checkOrganizationAccess } from '@/lib/organization';
 import { prolificService, ProlificService } from '@/lib/services/prolific';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(req: NextRequest) {
   try {
-    const authResult = await requireAdmin(req);
+    const authResult = await requireAuth(req);
     if (authResult instanceof NextResponse) {
       return authResult;
     }
@@ -21,6 +22,12 @@ export async function POST(req: NextRequest) {
 
     if (!experiment || !experiment.organizationId) {
       return NextResponse.json({ error: 'Experiment not found or missing organization' }, { status: 404 });
+    }
+
+    // Check if user has admin access to the organization
+    const userId = authResult.user?.id;
+    if (!userId || !await checkOrganizationAccess(experiment.organizationId, userId, 'ADMIN')) {
+      return NextResponse.json({ error: 'Admin access required for this organization' }, { status: 403 });
     }
 
     // Create organization-specific Prolific service
