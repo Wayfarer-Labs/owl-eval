@@ -66,12 +66,7 @@ export function getVideoKey(experimentId: string, comparisonId: string, modelLab
 export function getProxyVideoUrl(key: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
   
-  console.log('🔧 getProxyVideoUrl debug:', {
-    key,
-    NEXT_PUBLIC_APP_URL: baseUrl,
-    windowLocation: typeof window !== 'undefined' ? window.location.href : 'server-side',
-    NODE_ENV: process.env.NODE_ENV
-  });
+  // Debug logging removed for production
   
   if (!baseUrl) {
     // Fallback: try to detect from window.location in browser
@@ -79,7 +74,7 @@ export function getProxyVideoUrl(key: string): string {
       const protocol = window.location.protocol;
       const host = window.location.host;
       const generatedUrl = `${protocol}//${host}/api/video/${key}`;
-      console.log('🔧 Using window.location fallback:', generatedUrl);
+      // Using window.location fallback
       return generatedUrl;
     } else {
       // Server-side: NEXT_PUBLIC_APP_URL must be set properly in production
@@ -88,7 +83,7 @@ export function getProxyVideoUrl(key: string): string {
   }
   
   const generatedUrl = `${baseUrl}/api/video/${key}`;
-  console.log('🔧 Using NEXT_PUBLIC_APP_URL:', generatedUrl);
+  // Using NEXT_PUBLIC_APP_URL
   return generatedUrl;
 }
 
