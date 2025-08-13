@@ -175,7 +175,7 @@
   
   .animate-shimmer {
     animation: shimmer 2s infinite linear;
-    background: linear-gradient(90deg, #f0f0f0 0px, #e0e0e0 40px, #f0f0f0 80px);
+    background: linear-gradient(90deg, hsl(var(--muted)) 0px, hsl(var(--muted-foreground) / 0.1) 40px, hsl(var(--muted)) 80px);
     background-size: 200px;
   }
 }

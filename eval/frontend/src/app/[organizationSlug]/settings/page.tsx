@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
+import { OrganizationManagement } from '@/components/admin/organization-management';
 
 interface OrganizationSettings {
   prolificApiKey?: string;
@@ -281,54 +282,7 @@ export default function OrganizationSettingsPage() {
         </TabsContent>
 
         <TabsContent value="members" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Team Members</CardTitle>
-              <CardDescription>
-                Manage your organization&apos;s team members and their roles.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">Member Management</h3>
-                <p className="text-gray-600 mb-4">
-                  Team member management is handled through Stack Auth. Members are automatically synced from your Stack Auth team.
-                </p>
-                <div className="flex gap-2 justify-center">
-                  <Button variant="outline" onClick={() => window.open('https://app.stack-auth.com', '_blank')}>
-                    Manage in Stack Auth
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    onClick={async () => {
-                      try {
-                        const response = await fetch(`/api/organizations/${organization.id}/sync-stack-auth`, {
-                          method: 'POST',
-                        });
-                        if (response.ok) {
-                          toast({
-                            title: "Sync successful",
-                            description: "Team members synced successfully",
-                          });
-                        } else {
-                          throw new Error('Sync failed');
-                        }
-                      } catch (error) {
-                        toast({
-                          title: "Error",
-                          description: "Failed to sync team members",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    Sync Members
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <OrganizationManagement />
         </TabsContent>
 
         <TabsContent value="integrations" className="space-y-6">
